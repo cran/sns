@@ -1,0 +1,7 @@
+0.9	* Initial release to CRAN
+
+TODO for future releases
+------------------------
+	* elaborate and expose expander framework (may inlcude a vignette, regression factory)
+	* add 2-paramter expander use-case (weibull survival analysis)
+	* add HB regression example
