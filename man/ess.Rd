@@ -4,7 +4,7 @@
 \title{Effective Sample Size Calculator}
 
 \description{
-Computes the effective sample size using the algorithm in Section 2.3 of the paper by Madeline Thompson. The algorithm is taken from earlier work on 'Initial Sequence Estimators' by multiple authors. The 'magic' argument is inspired by the Appendix in the No U-Turn Sampler paper by Hoffman & Gelman.
+Computes the effective sample size using the algorithm in Section 2.3 of the paper by Madeline Thompson. The algorithm is taken from earlier work on `Initial Sequence Estimators' by multiple authors. The 'magic' argument is inspired by the Appendix in the No U-Turn Sampler paper by Hoffman & Gelman.
 }
 
 \usage{
@@ -20,7 +20,7 @@ ess(chain, mu=NULL, adj=TRUE, magic=0.05)
 }
 
 \value{
-  effective sample sizes for the time series in each column of \code{chain}.
+  Vector with effective sample sizes for the time series in each column of \code{chain}.
 }
 
 \note{
@@ -42,7 +42,7 @@ Using the 'magic' argument (and choosing its value) is not mathematically rigoro
    # Evaluator for Logistic log-likelihood, gradient, Hessian
    fghEval <- glmfgh(N=100, K=2, glmtype="logistic")
    # Draw samples using SNS
-   sns.out <- runSNS(K, burnin.iters=20, nsamples=1000, fghEval)
+   sns.out <- sns.run(K, burnin.iters=20, nsamples=1000, fghEval)
    # Compute effective sample size
    apply(sns.out$samplesMat, 2, ess)
   }

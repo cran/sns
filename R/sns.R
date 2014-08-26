@@ -143,6 +143,9 @@ sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
 sns.run <- function(K, nburnin, nsample, fghEval, start=NULL, print.level=0, 
                     report.progress=100, ...)
 {
+  stopifnot(nburnin >= 0)
+  stopifnot(nsample >= 1)
+
   if (report.progress <= 0) {
       warning("Invalid value specifiec for 'report.progress', using default.")
       report.progress <- 100
@@ -154,8 +157,9 @@ sns.run <- function(K, nburnin, nsample, fghEval, start=NULL, print.level=0,
   # Burn In iterations
   sample <- start
   t0 <- proc.time()
-  for (i in 1:nburnin) {
-      sample <- sns(sample, fghEval, rnd = FALSE)
+  if (nburnin) {
+      for (i in 1:nburnin)
+          sample <- sns(sample, fghEval, rnd = FALSE)
   }
   t1 <- proc.time()
   burninTime <- as.numeric(t1 - t0)[3]

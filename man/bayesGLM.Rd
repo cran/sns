@@ -24,13 +24,13 @@ glmfgh(N, K, glmtype = "logistic", X=NULL, y=NULL)
 }
 
 \note{
-GLMs are distributions where a linear expression replaces the parameter in some 'base' distributions. A general Hessian expander framework relying on the 'Log-concavity invariance theorem' given in \code{Appendix A} of the preprint \code{Mahani and Sharabiani (2013)} is used to generate the Hessian and gradient given those of a base distribution.
+GLMs are distributions where a linear expression replaces the parameter in some `base' distributions. A general framework to compute the expanded Hessian from that of the base, following the `Log-concavity invariance theorem' (\code{Appendix A} of the preprint \emph{Mahani and Sharabiani (2013)}), is used to generate the Hessian and gradient.
 
 \code{expand.1par.R} has the Hessian and gradient expander code for probability distributions derived from any one paramter base distributions. The derived distributions are guaranteed to be log-concave if the base distribution is log-concave as shown in the referred paper.  
 }
 
 \references{
- Mahani, Alireza S. and Sharabiani, Mansour T.S. (2013)
+ Mahani, Alireza S. and Sharabiani, Mansour T.A. (2013)
  \emph{Metropolis-Hastings Sampling Using Multivariate Gaussian Tangents}
  \url{http://arxiv.org/pdf/1308.0657v1.pdf}
 }
