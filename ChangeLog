@@ -1,0 +1,13 @@
+Changes in 1.0.0
+  * Added state space partitioning to sns(), using recursion.
+  * Refined sns.run() interface.
+  * Refined print/summary S3 methods.
+  * Added print.summary.sns, plot.sns, predict.sns, summary.predict.sns and print.summary.predict.sns methods.
+  * Improved documentation, including new examples.
+  * Refined ess() implementation and interface, and added logic to handle zero-variance cases.
+  * Added vignette.
+
+Changes in 0.9.1
+  * Made improvements and corrected typos in the documention.
+  * Fixed typo in an author name.
+  * Fixed corner cases bugs in sns.run().

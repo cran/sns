@@ -1,41 +1,5 @@
-###############################################################################
-#                        Package: sns                                         #
-#                                                                             #
-# Stochastic Newton Sampler (SNS)- implements the MH-MGT (Metropolis-Hastings #
-# with Multivariate Gaussian Tangents) algorithm described in the preprint:   #
-#                        http://arxiv.org/abs/1308.0657                       #
-# Draws samples from twice differentiable, log-concave pdf.                   #
-#                                                                             #
-# Version: 1.0                                                                #
-#                                                                             #
-#               Scientific Computing Group, Sentrana Inc.                     #
-###############################################################################
-
-###############################################################################
-# 	Core sampling function: draws samples from a multivariate pdf
-# Args:
-#   init - starting point for the Markov chain
-#   f    - function, gradient, Hessian evaluator for the log-density. 
-#          Must a return a list with labels:
-#          f - the log-probability density
-#          g - gradient vector 
-#          h - Hessian matrix
-#   rnd  - Runs 1 iteration of Newton's method (non-stochastic) when FALSE
-#          Runs Metropolis-Hastings for draw a sample when TRUE
-#          NOTE: Set to FALSE only during burn-in 
-#   gfit - Gaussian fit at 'init'. If NULL, Gaussian fit at 'init' is computed
-#   ...  - Extra args all passed to evaluator whenever it's called
-#
-# Output:
-#   The sample, drawn from the pdf, as a vector, with attributes:
-#     accept - TRUE/FALSE, specifying whether the Metropolis move was accepted
-#     ll     - value of the function at the sampled point
-#     gfit   - Gaussian fit at the sampled point
-###############################################################################
-sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
+sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, ...)
 { 
-  f <- fghEval
-  x <- init
 
   fitGaussian <- function(x, f, ...) 
   {
@@ -49,15 +13,41 @@ sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
                f=ret$f,            # function value 
                g=ret$g))           # gradient 
   }
+  
+  if (!is.null(part)) { # code for 'state space partitioning', recursive call
+    fghEval.part <- function(xsub, xfull, subset, ...) {
+      xfull[subset] <- xsub
+      ret <- fghEval(xfull, ...)
+      return (list(f = ret$f, g = ret$g[subset], h = ret$h[subset, subset]))
+    }
+    npart <- length(part)
+    accept <- logical(npart)
+    if (mh.diag) {
+      diag <- array(NA, dim = c(4, npart))
+      dimnames(diag) <- list(c("log.p", "log.p.prop", "log.q", "log.q.prop"), 1:npart)
+    }
+    for (n in 1:npart) {
+      subset <- part[[n]]
+      rettmp <- sns(x = x[subset], fghEval = fghEval.part, rnd = rnd, gfit = NULL, part = NULL, mh.diag = mh.diag, xfull = x, subset = subset, ...)
+      x[subset] <- rettmp
+      accept[n] <- attr(rettmp, "accept")
+      if (mh.diag) diag[, n] <- attr(rettmp, "mh.diag")
+    }
+    attr(x, "lp") <- attr(rettmp, "lp")
+    attr(x, "accept") <- accept
+    attr(x, "gfit") <- fitGaussian(x, fghEval, ...)
+    if (mh.diag) attr(x, "mh.diag") <- mh.diag
+    return (x)
+  }
 
   # rnd: if FALSE, perform Newton's optimization (non-stochastic)
   # Fit Gaussian at x
-  if (is.null(gfit)) gfit <- fitGaussian(x = x, f = f, ...)
+  if (is.null(gfit)) gfit <- fitGaussian(x = x, f = fghEval, ...)
   mu     <- gfit$mu 
   Sigma  <- gfit$Sigma   # Covariance
   iSigma <- gfit$iSigma  # Inverse covariance
 
-  K <- length(x);
+  K <- length(x)
       
   if (rnd) {
     # Draw sample from proposal distribution (Gaussian fit at x)
@@ -71,13 +61,13 @@ sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
         
     fk <- gfit$f; # Values at the current point
     gk <- gfit$g; 
-    fk1 <- f(search_x, ...)$f; # Function value at searching point
+    fk1 <- fghEval(search_x, ...)$f; # Function value at searching point
     ls_iter <- 1;
     # Linesearch by backtracking from full Newton step
     while (fk1 < fk + c*alphak*(t(gk)%*%d) && ls_iter < 20) { 
       alphak <- alphak*rho; # if so, then go half way
       search_x <- x + alphak*d;
-      fk1 <- f(search_x, ...)$f;
+      fk1 <- fghEval(search_x, ...)$f;
       ls_iter <- ls_iter + 1;
     }
     x.prop <- as.vector(search_x);
@@ -86,7 +76,7 @@ sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
   log.q.prop <- dmvnorm(as.vector(x.prop), mu, Sigma, log=TRUE)
   
   # fit Gaussian at x.prop
-  gfit.prop <- fitGaussian(x=x.prop,f=f,...)
+  gfit.prop <- fitGaussian(x=x.prop,f=fghEval,...)
   mu.prop <- gfit.prop$mu
   Sigma.prop <- gfit.prop$Sigma
   iSigma.prop <- gfit.prop$iSigma
@@ -96,97 +86,90 @@ sns <- function(init, fghEval, rnd=TRUE, gfit=NULL, ...)
   
   log.p <- gfit$f
   log.p.prop <- gfit.prop$f
-  log.ratio <- (log.p.prop-log.p) + (log.q-log.q.prop)
-  ratio <- min(1,exp(log.ratio))
   
+  log.ratio <- (log.p.prop-log.p) + (log.q-log.q.prop)
+  ratio <- min(1, exp(log.ratio))
+    
   # perform acceptance test
-  if (ratio==1 || runif(1)<ratio || !rnd) {
+  if (!rnd || ratio==1 || runif(1)<ratio) {
 	 gfit <- gfit.prop
 	 x <- x.prop;
-   attr(x,"sample") <- x.prop
 	 attr(x,"accept") <- TRUE
-	 attr(x,"ll") <- log.p.prop
+	 attr(x,"lp") <- log.p.prop
   } else {
 	 attr(x,"accept") <- FALSE
-	 attr(x,"ll") <- log.p
+	 attr(x,"lp") <- log.p
   }
   attr(x,"gfit") <- gfit
+
+  if (mh.diag) {
+    diag <- c(log.p, log.p.prop, log.q, log.q.prop)
+    names(diag) <- c("log.p", "log.p.prop", "log.q", "log.q.prop")
+    attr(x, "mh.diag") <- diag
+  }
+
   return (x)
 }
 
-###############################################################################
-#                 Main user function
-# Args:
-#   K        - dimension of the space to draw samples from 
-#   nburnin  - number of burn-in iteration (non-stochastic, Newton-Raphson)
-#   nsample  - number of samples to draw (after burn-in)
-#   fghEval  - function, gradient, Hessian evaluator for the log-density. 
-#              Must a return a list with labels:
-#                f - the log-probability density
-#                g - gradient vector 
-#                h - Hessian matrix
-#   start    - initial point for the Markov chain. Default: rep(0.1, K)          
-#   print.level - if non zero, prints sampling progress
-#   report.progress - number of sampling iterations between printing progress 
-#   ...  - Extra args all passed to evaluator whenever it's called
-# 
-# Output:
-#   An object of class sns
-#
-# Note: 
-#   The sampler is a Metropolis-Hastings Markov chain Monte Carlo variant, with
-#   a special form of the proposal function. During burn-in, a non-stochastic
-#   Newton-Raphson optimization is performed to get close to the pdf's mode.
-#   
-#   Currently restricted to log-concave, twice differentiable densities.   
-###############################################################################
-sns.run <- function(K, nburnin, nsample, fghEval, start=NULL, print.level=0, 
-                    report.progress=100, ...)
+sns.run <- function(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
+  , mh.diag = FALSE, part = NULL, print.level = 0
+  , report.progress = ceiling(niter/10), ...)
 {
-  stopifnot(nburnin >= 0)
-  stopifnot(nsample >= 1)
-
+  # checking arguments
+  stopifnot(niter >= 1)
   if (report.progress <= 0) {
-      warning("Invalid value specifiec for 'report.progress', using default.")
-      report.progress <- 100
+      warning("invalid value specific for 'report.progress', using default.")
+      report.progress <- ceiling(niter/10)
   }
-  if (is.null(start)) start <- rep(0.1, K) 
-  if (!is.null(start) && length(start) != K)
-      stop("Mismatch between args 'K' and 'start'")
+  if (missing(init)) stop("starting point for MCMC chain must be specified")
+  npart <- max(length(part),1)
 
-  # Burn In iterations
-  sample <- start
-  t0 <- proc.time()
-  if (nburnin) {
-      for (i in 1:nburnin)
-          sample <- sns(sample, fghEval, rnd = FALSE)
+  # initialization
+  K <- length(init)
+  x <- init
+  accept <- matrix(logical(niter * npart), ncol = npart)
+  lp <- double(niter)
+  chain <- matrix( , nrow = niter, ncol = K)
+  if (mh.diag) {
+    diagnostic <- array(NA, dim = c(niter, 4, npart))
+    dimnames(diagnostic) <- list(1:niter, c("log.p", "log.p.prop", "log.q", "log.q.prop"), 1:npart)
+    if (niter > nnr && npart == 1) f.reldev <- rep(NA, niter - nnr)
   }
-  t1 <- proc.time()
-  burninTime <- as.numeric(t1 - t0)[3]
-  if (print.level)
-      cat(paste0("Finished ", nburnin, " burn-in iterations.\n"))
 
-  # MCMC sampling
-  acceptCnt <- 0
-  chain <- matrix( , nrow=nsample, ncol=K)
-  chain[1, ] <- attr(sample, "sample")
-  t1 <- proc.time()
-  for (i in 2:nsample) {
-      sample <- sns(sample, fghEval)
-      if (attr(sample, "accept")) acceptCnt <- acceptCnt + 1
-      chain[i, ] <- attr(sample, "sample")
+  # performing nr/mcmc iterations
+  for (i in 1:niter) {
+      x <- sns(x, fghEval, rnd = i > nnr, gfit = attr(x, "gfit"), mh.diag = mh.diag, part = part, ...)
+      accept[i, ] <- attr(x, "accept")
+      lp[i] <- attr(x, "lp")
+      chain[i, ] <- x
+      if (mh.diag) {
+        diagnostic[i, , ] <- attr(x, "mh.diag")
+        if (npart == 1) {
+          if (i == nnr) {
+            f.ref <- attr(x, "gfit")$f
+            x.ref <- attr(x, "gfit")$mu
+          } else if (i > nnr) {
+            if (attr(x, "gfit")$f < f.ref) f.reldev[i - nnr] <- (attr(x, "gfit")$f - f.ref + 0.5 * t(x - x.ref) %*% attr(x, "gfit")$iSigma %*% (x - x.ref)) / (f.ref - attr(x, "gfit")$f)
+          }
+        }
+      }
       if (print.level && (i %% report.progress == 0))
-          cat(paste0("Finished  ", i, " sampling iterations out of ", nsample, ".\n"))
+          cat(paste0("finished iter ", i, " of ", niter, "\n"))
   }
-  t2 <- proc.time()
-  sampleTime <- as.numeric(t2 - t1)[3]
-  acceptRate <- acceptCnt * 100 / nsample
 
-  return(structure(list(
-           samplesMat = chain,
-           acceptance = acceptRate,
-           burn.iters = nburnin,
-           sample.time= sampleTime,
-           burnin.time= burninTime),
-           class = "sns")) 
+  # assembling output
+  attr(chain, "init") <- init
+  attr(chain, "lp.init") <- fghEval(init, ...)$f
+  attr(chain, "accept") <- accept
+  attr(chain, "lp") <- lp
+  attr(chain, "nnr") <- nnr
+  attr(chain, "part") <- part
+  if (mh.diag) {
+    attr(chain, "mh.diag") <- drop(diagnostic)
+    if (niter > nnr && npart == 1) attr(chain, "reldev") <- f.reldev
+  }
+  class(chain) <- "sns"
+  return (chain)
 }
+
+

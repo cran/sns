@@ -1,10 +1,19 @@
-import(mvtnorm)
+importFrom(mvtnorm, rmvnorm, dmvnorm)
+importFrom(coda, effectiveSize)
 
 export("ess")
+
 export("sns")
 export("sns.run")
-export("glmfgh")
+export("sns.make.part")
+export("sns.check.part")
 
 # sns methods
 S3method("print", "sns")
 S3method("summary", "sns")
+S3method("print", "summary.sns")
+S3method("plot", "sns")
+S3method("predict", "sns")
+S3method("summary", "predict.sns")
+S3method("print", "summary.predict.sns")
+
