@@ -10,8 +10,9 @@
 \usepackage{color}
 %\usepackage[toc]{appendix}
 \usepackage{amsthm}
+\usepackage{subfig}
 
-%\VignetteIndexEntry{Stochastic Newton Sampler: R Package sns}
+%\VignetteIndexEntry{Stochastic Newton Sampler: The R Package sns}
 %\VignetteKeyword{negative definiteness, regression, optimization, sampling}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -65,16 +66,16 @@ Asad Hasan\\ Scientific Computing \\ Sentrana Inc. \AND
 Marshall Jiang\\ Department of Mathematics \\ Cornell University \And
 Mansour T.A. Sharabiani\\ National Heart and Lung Institute \\ Imperial College London}
 
-\title{Stochastic Newton Sampler: \proglang{R} Package \pkg{sns}}
+\title{Stochastic Newton Sampler: The \proglang{R} Package \pkg{sns}}
 
 %% for pretty printing and a nice hypersummary also set:
 \Plainauthor{Alireza S. Mahani, Mansour T.A. Sharabiani} %% comma-separated
-\Plaintitle{Stochastic Newton Sampler: R Package sns} %% without formatting
-\Shorttitle{Stochastic Newton Sampler: \proglang{R} Package \pkg{sns}} %% a short title (if necessary)
+\Plaintitle{Stochastic Newton Sampler: The R Package sns} %% without formatting
+\Shorttitle{Stochastic Newton Sampler: The \proglang{R} Package \pkg{sns}} %% a short title (if necessary)
 
 %% an abstract and keywords
 \Abstract{ 
-The \proglang{R} package \pkg{sns} implements Stochastic Newton Sampler (SNS), a Metropolis-Hastings Monte Carlo Markov Chain algorithm where the proposal density function is a multivariate Gaussian based on a local, second-order Taylor series expansion of log-density. The mean of the proposal function is the full Newton step in Newton-Raphson optimization algorithm. Taking advantage of the local, multivariate geometry captured in log-density Hessian allows SNS to be more efficient than univariate samplers, approaching independent sampling as the density function increasingly resembles a multivariate Gaussian. SNS requires the log-density Hessian to be negative-definite everywhere in order to construct a valid proposal function. This property holds, or can be easily checked, for many GLM-like models. When initial point is far from density peak, running SNS in non-stochastic mode, i.e., taking the Newton step with line search, allows the MCMC chain to converge to high-density areas faster. For high-dimensional problems, partitioning of state space into lower-dimensional subsets, and applying SNS to the subsets within a Gibbs sampling framework can significantly improve the mixing of SNS chains. In addition to the above strategies for improving convergence and mixing, \pkg{sns} offers a rich set of diagnostics and visualization capabilities, as well as a function for sample-based calculation of Bayesian predictive posterior distributions.
+The \proglang{R} package \pkg{sns} implements Stochastic Newton Sampler (SNS), a Metropolis-Hastings Monte Carlo Markov Chain algorithm where the proposal density function is a multivariate Gaussian based on a local, second-order Taylor-series expansion of log-density. The mean of the proposal function is the full Newton step in Newton-Raphson optimization algorithm. Taking advantage of the local, multivariate geometry captured in log-density Hessian allows SNS to be more efficient than univariate samplers, approaching independent sampling as the density function increasingly resembles a multivariate Gaussian. SNS requires the log-density Hessian to be negative-definite everywhere in order to construct a valid proposal function. This property holds, or can be easily checked, for many GLM-like models. When initial point is far from density peak, running SNS in non-stochastic mode by taking the Newton step - augmented with line search - allows the MCMC chain to converge to high-density areas faster. For high-dimensional problems, partitioning of state space into lower-dimensional subsets, and applying SNS to the subsets within a Gibbs sampling framework can significantly improve the mixing of SNS chains. In addition to the above strategies for improving convergence and mixing, \pkg{sns} offers utilities for diagnostics and visualization, sample-based calculation of Bayesian predictive posterior distributions, numerical differentiation, and log-density validation.
 }
 \Keywords{monte carlo markov chain, metropolis-hastings, newton-raphson optimization, negative-definite hessian, log-concavity}
 \Plainkeywords{monte carlo markov chain, metropolis-hastings, newton-raphson optimization, negative-definite hessian, log-concavity} %% without formatting
@@ -106,21 +107,21 @@ E-mail: \email{alireza.mahani@sentrana.com}\\
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 <<echo=FALSE, results=hide>>=
-options(prompt = "R> ", continue = "+  ", width = 70, useFancyQuotes = FALSE)
+options(prompt = "R> ", continue = "+  ", width = 80, useFancyQuotes = FALSE)
 @
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Introduction}\label{section-introduction}
-In most real-world applications of Monte Carlo Markov Chain (MCMC) sampling, the probability density function (PDF) being sampled is multidimensional. Univariate samplers such as Slice Sampler~\citep{neal2003slice} and Adaptive Rejection Sampler~\citep{gilks1992adaptive} can be embedded in the Gibbs sampling framework~\citep{geman1984stochastic} to sample from multivariate PDFs~\citep{mahani2014mfusampler}. Univariate samplers generally have few tuning parameters, making them ideal candidates for black-box MCMC software such as JAGS~\citep{plummer-jags} and OpenBUGS~\citep{thomas2006making}. However, they become less effective as PDF dimensionality rises and dimensions become more correlated~\citep{girolami2011riemann}. Therefore, development - and software implementation - of efficient, black-box multivariate MCMC algorithms is of great importance to widespread application of probabilistic models in statistics and machine learning.
+In most real-world applications of Monte Carlo Markov Chain (MCMC) sampling, the probability density function (PDF) being sampled is multidimensional. Univariate samplers such as the slice sampler~\citep{neal2003slice} and adaptive rejection sampler~\citep{gilks1992adaptive} can be embedded in the Gibbs sampling framework~\citep{geman1984stochastic} to sample from multivariate PDFs~\citep{mahani2014mfusampler}. Univariate samplers generally have few tuning parameters, making them ideal candidates for black-box MCMC software such as JAGS~\citep{plummer-jags} and OpenBUGS~\citep{thomas2006making}. However, they become less effective as PDF dimensionality rises and dimensions become more correlated~\citep{girolami2011riemann}. Therefore, development - and software implementation - of efficient, black-box multivariate MCMC algorithms is of great importance to widespread application of probabilistic models in statistics and machine learning. Recent theoretical~\citep{girolami2011riemann,hoffman2014no} and software development~\citep{stan-software:2014} efforts to make multivariate samplers such as Hamiltonian Monte Carlo (HMC)~\citep{duane1987hybrid} more self-tuning and efficient can be viewed in this light.
 
-The \proglang{R} package \pkg{sns} implements Stochastic Newton Sampler (SNS), a Metropolis-Hastings MCMC algorithm~\citep{hastings1970monte}, where the proposal distribution is a locally-fitted multivariate Gaussian resulting from second-order Taylor series expansion of the log-density. In its current implementation, SNS requires the log-density to be twice-diffenrentiable and globally concave, or equivalently that its Hessian matrix be negative-definite everywhere. For many Generalized Linear Models (GLMs) these conditions are satisfied~\citep{gilks1992adaptive}, and the invariance theorem of \cite{mahani2015expander} allows Hessian negative-definiteness to be studied and proven in the much lower-dimensional space of base distributions, rather than the high-dimensional space of regression coefficients.
+The \proglang{R} package \pkg{sns} implements Stochastic Newton Sampler (SNS), a Metropolis-Hastings MCMC algorithm~\citep{hastings1970monte}, where the proposal distribution is a locally-fitted multivariate Gaussian resulting from second-order Taylor series expansion of the log-density. In its current implementation, SNS requires the log-density to be twice-diffenrentiable and globally concave, or equivalently that its Hessian matrix be negative-definite everywhere. For many Generalized Linear Models (GLMs) these conditions are satisfied~\citep{gilks1992adaptive}, and the invariance theorem of Section~\ref{subsection-log-concavity} allows Hessian negative-definiteness to be studied and proven in the much lower-dimensional space of linear predictors, rather than the high-dimensional space of regression coefficients.
 
-SNS has appeared in the literature under several variations and labels. \cite{gamerman1997sampling} extend Iterative Reweighted Least Squares (IRLS) - the primary estimation technique for GLM models - to MCMC sampling by adding a Metropolis-Hastings step to it. Given that IRLS is a close cousin of Newton-Raphson optimization, their method can be considered a specialization of SNS for GLM models. \cite{qi2002hessian} present what they call `Hessian-based Metropolis-Hastings' (HMH), which is nearly identical to SNS, but they do not address the high-dimensional mixing problem, nor do they provide an open-source software implementation. More recently, the simplified manifold Metropolis adjusted Langevin Algorithm (MMALA) of \cite{girolami2011riemann} is very similar to SNS with the addition a tunable step size, or learning rate. The software accompanying their paper is written in \proglang{MATLAB}~\citep{MATLAB:2014}. The \proglang{R} package \pkg{sns}, to our knowledge, is the first open-source implemnentation of the SNS algorithm, including extensions for improving convergence (\code{rnd} and\code{nnr} arguments) and mixing (\code{part} argument), diagnostic and visualization methods (\code{summary.sns} and \code{plot.sns}), and sample-based prediction (\code{predict.sns}).
+SNS has appeared in the literature under several variations and labels. \cite{gamerman1997sampling} extend Iterative Reweighted Least Squares (IRLS) - the primary estimation technique for GLM models - to MCMC sampling by adding a Metropolis-Hastings step to it. Given that IRLS is a close cousin of Newton-Raphson optimization, their method can be considered a specialization of SNS for GLM models. \cite{qi2002hessian} present what they call `Hessian-based Metropolis-Hastings' (HMH), which is nearly identical to SNS, but they do not address the high-dimensional mixing problem, nor do they provide an open-source software implementation. More recently, the simplified Manifold Metropolis Adjusted Langevin Algorithm (MMALA) proposed in \cite{girolami2011riemann} is very similar to SNS with the addition of a tunable step size, or learning rate. The software accompanying their paper, however, is written in \proglang{MATLAB}~\citep{MATLAB:2014}. The \proglang{R} package \pkg{sns}, to our knowledge, is the first open-source implemnentation of the SNS algorithm, including extensions for improving convergence (\code{rnd} and \code{nnr} arguments) and mixing (\code{part} argument), diagnostic and visualization methods (\code{summary.sns} and \code{plot.sns}), sample-based prediction (\code{predict.sns}), and numerical differentiation using \pkg{numDeriv} package~\citep{numDeriv2012package}.
 
-The paper is organized as follows. In Section~\ref{section-theory}, we review the theoretical background for SNS, including an overview of Metropolis-Hastings algorithms, followed by the multivariate Gaussian proposal PDF used in SNS. In Section~\ref{section-implementation}, we discuss the implementation of SNS algorithm in the \pkg{sns} package. Section~\ref{section-using} offers several examples to illustrate the usage of \pkg{sns}. Finally, Section~\ref{section-summary} provides a summary and pointers for future extensions to the software as well as potential research directions.
+The paper is organized as follows. In Section~\ref{section-theory}, we review the theoretical background for SNS, including assessment of log-concavity and calculation of gradient and Hessian. In Section~\ref{section-implementation}, we discuss the implementation of SNS algorithm in the \pkg{sns} package, including facilities for improving convergence and mixing, full Bayesian prediction, and numerical calculation of PDF derivatives. Section~\ref{section-using} offers several examples to illustrate the usage of \pkg{sns} features, as well as how SNS can be combined with other samplers. In Section~\ref{section-performance} we study the performance of SNS in comparison with a few other samplers. Finally, Section~\ref{section-summary} provides a summary of our work and a discussion of potential future research and development directions.
 
 \section{Theory}\label{section-theory}
-We begin with a brief overview of the Metropolis-Hastings algorithm.
+In this section, we provide a brief overview of Metropolis-Hastings algorithm and offer a formal definition of the SNS proposal PDF. This is followed by a discussion of log-concavity requirement as well as computation of gradient and Hessian, focusing on an important class of models, referred to as `exchangeable regression' models (Section~\ref{subsection-log-concavity}).
 
 \subsection{Metropolis-Hastings algorithm}\label{subsection-mh}
 In Metropolis-Hastings (MH) MCMC sampling of the PDF, $p(\zz)$, we generate a sample $\zz^*$ from the proposal density function $q(\zz | \zz^\tau)$, where $\zz^\tau$ is the current state. We then accept the proposed state $\zz^*$ with probability $A(\zz^*, \zz^\tau)$, where:
@@ -130,9 +131,9 @@ A(\zz^*, \zz^\tau) = \mathrm{min} \left( 1 \,,\, \frac{p(\zz^*) q(\zz^\tau | \zz
 The MH transitions satisfy detailed balance:
 \begin{equation}
 \begin{array}{lcl}
-p(\zz)q(\zz|\zz')A(\zz',\zz) &=& \mathrm{min}(p(\zz)q(\zz|\zz'),p(\zz')q(\zz'|\zz)) \\
-&=& \mathrm{min}(p(\zz')q(\zz'|\zz),p(\zz)q(\zz|\zz')) \\
-&=& p(\zz')q(\zz'|\zz)A(\zz,\zz')
+p(\zz^\tau) q(\zz^* | \zz^\tau) A(\zz^* , \zz^\tau) &=& \mathrm{min} \left( p(\zz^\tau) q(\zz^* | \zz^\tau) \, , \, p(\zz^*) q(\zz^\tau | \zz^*) \right) \\
+&=& \mathrm{min} \left( p(\zz^*) q(\zz^\tau | \zz^*) \, , \, p(\zz^\tau) q(\zz^* | \zz^\tau) \right) \\
+&=& p(\zz^*) q(\zz^\tau | \zz^*) A(\zz^\tau , \zz^*)
 \end{array}
 \end{equation}
 The detailed balance property ensures that $p(\zz)$ is invariant under MH transitions. For a discussion of ergodicity of MH algorithm, see~\cite{roberts1999convergence}.
@@ -142,7 +143,7 @@ SNS proposal density is a multivariate Gaussian fitted locally to the density be
 \begin{equation}\label{equation-taylor}
 f(\xx) \approx f(\xx_0) + \g(\xx_0)^\top \, (\xx-\xx_0) + \frac{1}{2} (\xx-\xx_0)^\top \, \HH(\xx_0) \, (\xx-\xx_0)
 \end{equation}
-where $f:\R^K \rightarrow \R$, and $\g$ and $\HH$ are the gradient vector and Hessian matrix for $f$, respectively, of dimensions $K$ and $K \times K$. Assuming that $f$ is globally concave, the above approximation is equivalent to fitting the following multivariate Gaussian (which we refer to as $F(\xx)$) to the PDF:
+where $f:\R^K \rightarrow \R$ is the log-density, and $\g$ and $\HH$ are the gradient vector and Hessian matrix for $f$, respectively, with dimensions $K$ and $K \times K$. Assuming that $f$ is globally concave, the above approximation is equivalent to fitting the following multivariate Gaussian (which we refer to as $F(\xx)$) to the PDF:
 \begin{equation}\label{equation-gauss}
 F(\xx) = \frac{1}{(2\pi)^{K/2}|\SSigma|^{1/2}} \exp\left\{ -\frac{1}{2}(\xx-\mmu)^T \SSigma^{-1}(\xx-\mmu) \right\}
 \end{equation}
@@ -156,8 +157,79 @@ q(. \,|\, \xx) = \N(\xx - \HH^{-1}(\xx) \, \g(\xx) \,,\, -\HH^{-1}(\xx))
 \end{equation}
 Note that Equation~\ref{equation-newton-step} is simply the full Newton step~\citep{nocedal2006book}. We can therefore think of SNS as the stochastic counterpart of Newton-Raphson (NR) optimization. In NR optimization, we select the mean of the fitted Gaussian as the next step, while in SNS we draw a sample from the fitted Gaussian and apply MH test to accept or reject it. Also, note that in the special case where the sampled PDF is Gaussian, $f(\xx)$ is quadratic and therefore the proposal function is identical to the sampled PDF. In this case $A(\zz',\zz)$ is always equal to $1$, implying an acceptance rate of $100\%$.
 
+Contrary to standard Metropolis variants with multivariate Gaussians centered on current point (symmetric Gaussian proposal), SNS is an aggressive, non-local MCMC algorithm as it seeks to construct a global, Gaussian approximation of the PDF. Therein lies both its strength and its weakness. When the Gaussian approximation is sufficiently close to the true PDF, this can lead to a nearly-uncorrelated chain of samples, with the extreme case of perfectly uncorrelated samples for a multivariate Gaussian distribution. In such cases, SNS can be much more efficient than univariate and multivariate alternatives, including Metropolis sampling with symmetric Gaussian proposal. On the other hand, if the Gaussian approximation is poor, there can be little overlap between the two, resulting in low acceptance rate and inefficient sampling.
+
+Our empirical observations indicate that, in exchangeable regression models SNS performs best when the number of observations is large compared to the number of variables. Appendix~\ref{appendix-mixing-n} provides theoretical support for this observation in the special case of a univariate log-density. The \pkg{sns} package contains the `state space partitioning' strategy for improving mixing for SNS in high-dimensional problems (Section~\ref{subsection-convergence-mixing}). Performance of SNS vis-a-vis other sampling techniques under various data regimes is further illustrated in Section~\ref{section-performance}.
+
+\subsection{Log-density concavity}\label{subsection-log-concavity}
+Constructing a valid SNS proposal function (Eq.~\ref{equation-proposal}) requires the sampled log-density to be twice-differentiable and concave. Equivalently, the Hessian of log-density must exist and be negative definite. Many common probability distributions enjoy such property, perhaps with suitable transformations of parameters. We refer the reader to Table 2 of ~\cite{gilks1992adaptive} for a list of distributions and parameters that enjoy log-concavity. For Bayesian problems where log-density is a sum of contributions from log-prior and log-likelihood terms, it is sufficient for each term to be concave, since this property is additive.
+
+An important application of the Bayesian framework is exchangeable regression models~\citep{good2002extensions}, where 1) log-likelihood is the sum of contributions from individual data points, and 2) one or more parameters of a probability distribution are assumed to be (possibly nonlinear functions of) the inner product of a vector covariates and a vector of coefficients, often referred to as `linear predictors'. In such cases, log-density can be generically written in the following form:
+\begin{equation}\label{eq-loglike}
+L(\bbeta^1, \dots, \bbeta^J) = \sum_{n=1}^N f_n(<\xx_n^1, \bbeta^1>, \dots, <\xx_n^J, \bbeta^J>),
+\end{equation}
+where $<\boldsymbol{a},\boldsymbol{b}>$ is the inner product of vectors $\boldsymbol{a}$ and $\boldsymbol{b}$, $\xx_n^1,\hdots,\xx_n^J$ are the covariate vectors $1,\hdots,J$ for the $n$'th observation, and $\bbeta^1,\hdots,\bbeta^J$ are the vectors of coefficients corresponding to $J$ slots in the probability distributions $f_n(u^1,\hdots,u^J)$, $n=1,\hdots,N$. Typically, $J$ equals 1 or 2, with a notable exception being the multinomial distribution, used in multi-class logistic regression~\citep{hasan2014mnlogit}, where $J$ equals the number of classes.
+
+A convenient property of the functional form in Eq.~\ref{eq-loglike} is that the definiteness property of its Hessian as a function of the high-dimensional state space of $\bbeta$:
+\begin{equation}
+\bbeta \equiv (\bbeta^{1,t}, \dots, \bbeta^{J,t})^t,
+\end{equation}
+can be reduced to a much simpler problem, i.e. definiteness of the $J$-dimensional functions $f_n$ is Eq.~\ref{eq-loglike}, for $n=1,\hdots,N$. This notion is formally captured in the following theorem:
+\newtheorem{theorem:concavity_1}{Theorem}%[section]
+\begin{theorem:concavity_1} \label{theorem:concav_1}
+If all $f_n$'s in Equation~\ref{eq-loglike} have negative-definite Hessians AND if at least one of $J$ matrices $\XX^j \equiv (\xx^j_1, \dots, \xx^j_N)^t$ is full rank, then $L(\bbeta^1,\dots,\bbeta^J)$ also has a negative-definite Hessian.
+\end{theorem:concavity_1}
+Proof is provided in Appendix~\ref{appendix-definiteness-invariance}. Reasoning about definiteness of a matrix in a one- or two-dimensional space is much easier than doing so in a high-dimensional space, with dimensionality being the sum of lengths, $K^j$, of coefficients or $\sum_j K^j$. In a typical problem, this can sum be as large as 50 or 100. Theorem~\ref{theorem:concav_1}, on the other hand, means that for single-slot base distributions $f_n(u)$, we must simply prove that $f^{''}_n(u) < 0, \, \forall n$. For multi-slot distributions, we can use Silvester's criterion for negative-definiteness, requiring that leading principal minors alternate between positive and negative~\citep{gilbert1991positive}. In particular, for two-slot distributions, we require the diagonal elements to be negative while the determinant of the Hessian must be positive. It must be noted that Theorem~\ref{theorem:concav_1} offers a sufficient, but not necessary, set of conditions. It is therefore possible for a log-density of the form shown in Eq.~\ref{eq-loglike} to be negative-definite without satisfying the set of conditions stated in the above theorem. The log-density for heteroskedastic linear regression discussed in Section~\ref{subsection-example-log-concavity} is potentially one such example.
+
+In some cases, while the Hessian cannot be proven to be negative-definite, yet blocks within the full Hessian have this property. In such cases, SNS can be combined with other, more generic sampling algorithms such as slice sampler or HMC, all embedded in a Gibbs cycle. The implementation would be similar to that of state space partitioning approach in \pkg{sns} (Section~\ref{subsection-convergence-mixing}), but replacing SNS with alternative samplers for Hessian subsets (or blocks) that do not satisfy negative-definiteness. An example of this strategy, as well as the application of Theorem~\ref{theorem:concav_1} is provided in in Section~\ref{subsection-example-log-concavity}.
+
+In addition to the theoeretical support provided in Theorem~\ref{theorem:concav_1}, \pkg{sns} also contains a utility function for empirical assessment of negative-definiteness for Hessian blocks. This feature is described in Section~\ref{subsection-num-deriv}, and illustrated in Section~\ref{subsection-example-log-concavity}.
+
+\subsection{Calculation of gradient and Hessian}\label{subsection-calc-grad-hess}
+Deriving the expressions for the gradient vector and the Hessian matrix, and implementing them as computer programs, can be tedious. For exchangeable regression models, we can apply the chain rule of derivatives to log-density of Eq.~\ref{eq-loglike} to express the high-dimensional gradient and Hessian in terms of their low-dimensional counterparts for $f_n$'s. The first derivative of log-likelihood can be written as:
+\begin{equation}
+\G(\bbeta) \equiv \frac{\partial L}{\partial \bbeta} = ((\frac{\partial L}{\partial \bbeta^1})^t, \dots, (\frac{\partial L}{\partial \bbeta^J})^t)^t,
+\end{equation}
+where
+\begin{equation}
+(\frac{\partial L}{\partial \bbeta^j})^t \equiv (\frac{\partial L}{\partial \beta_1^j}, \dots, \frac{\partial L}{\partial \beta_{K^j}^j}).
+\end{equation}
+For second derivatives we have:
+\begin{equation}
+\HH(\bbeta) \equiv \frac{\partial^2 L}{\partial \bbeta^2} = \left[ \frac{\partial^2 L}{\partial \bbeta^j \partial \bbeta^{j'}} \right]_{j,j'=1,\dots,J},
+\end{equation}
+where we have defined $\HH(\bbeta)$ in terms of $J^2$ matrix blocks:
+\begin{equation}
+\frac{\partial^2 L}{\partial \bbeta^j \partial \bbeta^{j'}} \equiv \left[ \frac{\partial L}{\partial \beta_k^j \partial \beta_{k'}^{j'}} \right]_{j=1,\dots,K^j; j'=1,\dots,K^{j'}}
+\end{equation}
+Applying the chain rule to the log-likelihood function of Equation~\ref{eq-loglike}, we derive expressions for its first and second derivatives as a function of the derivatives of the base functions $f_1,\dots,f_N$:
+\begin{equation}\label{eq-gradient}
+\frac{\partial L}{\partial \bbeta^j} = \sum_{n=1}^N \frac{\partial f_n}{\partial \bbeta^j} = \sum_{n=1}^N \frac{\partial f_n}{\partial u^j} \xx_n^j = \XX^{j,t} \g^j,
+\end{equation}
+with
+\begin{equation}
+\g^j \equiv (\frac{\partial f_1}{\partial u^j}, \dots, \frac{\partial f_N}{\partial u^j})^t,
+\end{equation}
+and
+\begin{equation}
+\XX^j \equiv (\xx_1^j, \dots, \xx_N^j)^t.
+\end{equation}
+Similarly, for the second derivative we have:
+\begin{equation}\label{eq-hessian}
+\frac{\partial^2 L}{\partial \bbeta^j \partial \bbeta^{j'}} = \sum_{n=1}^N \frac{\partial^2 f_n}{\partial \bbeta^j \partial \bbeta^{j'}} = \sum_{n=1}^N \frac{\partial^2 f_n}{\partial u^j \partial u^{j'}} \, (\xx_n^j \otimes \xx_n^{j'}) = \XX^{j,t} \hh^{jj'} \XX^{j'},
+\end{equation}
+where $\hh^{jj'}$ is a diagonal matrix of size $N$ with $n$'th diagonal element defined as:
+\begin{equation}
+h_n^{jj'} \equiv \frac{\partial^2 f_n}{\partial u^j \partial u^{j'}}
+\end{equation}
+We refer to the matrix form of the Equations~\ref{eq-gradient} and \ref{eq-hessian} as `compact' forms, and the explicit-sum forms as `explicit' forms. The expander functions in the \proglang{R} package \pkg{RegressionFactory}~\citep{regfacpackage} use the compact form to implement the high-dimensional gradient and Hessian, while proof of Theorem~\ref{theorem:concav_1} utilizes the explicit-sum form of Equation~\ref{eq-hessian} (see Appendix~\ref{appendix-definiteness-invariance}).
+
+In addition to the expander framework discussed above, users can also utilize the numerical differentiation facility of \pkg{sns} to circumvent the need for deriving analytical expressions for gradient and Hessian. This is explained in Section~\ref{subsection-num-deriv}, and illustrated using an example in Section~\ref{subsection-example-log-concavity}.
+
 \section{Software implementation and features}\label{section-implementation}
-\subsection{Overview}\label{subsection-sns-algorithm}
+This section begins with an overview of functions included in \pkg{sns}. This is followed by a deep-dive into facilities for improving convergence and mixing of MCMC chains in SNS, diagnostic tools, and full Bayesian prediction. A discussion of capabilities for calculating and validatig log-density derivatives concludes this section.
+
+,\subsection{Overview}\label{subsection-sns-algorithm}
 The workhorse of \pkg{sns} package is the \code{sns} function, responsible for implementation of MH algorithm using the multivariate Gaussian proposal density described in Section~\ref{subsection-proposal}. \code{sns} implements the following steps:
 \begin{enumerate}
 \item
@@ -176,52 +248,78 @@ Calculate the ratio $r=\exp((f_{prop}-f_{old})+(logq_{old}-logq_{prop}))$.
 If $r \geq 1$ accept $\xx_{prop}$: $\xx_{new} \leftarrow \xx_{prop}$. Else, draw a random deviate $s$ from a uniform distribution over $[0,1)$. If $s<r$, then accept $\xx_{prop}$: $\xx_{new} \leftarrow \xx_{prop}$, else reject $\xx_{prop}$: $\xx_{new} \leftarrow \xx_{old}$.
 \end{enumerate}
 
-Fitting the multivariate Gaussian in steps~\ref{step-fit-1} and ~\ref{step-fit-2} is done via calls to the private function \code{fitGaussian}. We use the functions \code{dmvnorm} and \code{rmvnorm} from package \pkg{mvtnorm} to calculate the log-density of, and draw samples from, multivariate Gaussian proposal functions.
+Fitting the multivariate Gaussian in steps~\ref{step-fit-1} and ~\ref{step-fit-2} is done via calls to the private function \code{fitGaussian} in the \pkg{sns} package. We use the functions \code{dmvnorm} and \code{rmvnorm} from package \pkg{mvtnorm} to calculate the log-density of, and draw samples from, multivariate Gaussian proposal functions.
 
-There are two important arguments in \code{sns}, namely \code{rnd} and \code{part}. The first argument, \code{rnd}, controls whether the algorithm should run in stochastic or MCMC mode (which is the default choice), or in non-stochastic or Newton-Raphson (NR) mode. The second argument, \code{part}, controls the state space partitioning strategy. These arguments and their roles are described in Section~\ref{subsection-convergence-mixing}.
+There are three important arguments in \code{sns}: \code{rnd}, \code{part}, and \code{numderiv}. \code{rnd} controls whether the algorithm should run in stochastic or MCMC mode (which is the default choice), or in non-stochastic or Newton-Raphson (NR) mode. \code{part} controls the state space partitioning strategy. These two arguments and their roles are described in Section~\ref{subsection-convergence-mixing}. \code{numderiv} determines whether numerical differentiation must be used for calculating the gradient and/or Hessian of log-density, and is discussed in Section~\ref{subsection-num-deriv}.
 
 \code{sns.run} is a wrapper around \code{sns}, and offers the following functionalities:
 \begin{enumerate}
-\item Convenience of generating multiple samples via repeated calls to \code{sns}. After the first call, the Gaussian fit object (attached as attribute \code{gfit} in the returned value from \code{sns}) is fed by \code{sns.run} back to \code{sns} via argument \code{gfit}, in order to avoid unnecessary fitting of the proposal function at current value.
-\item Collecting diagnostic information such as log-probability (time series), acceptance rate, relative deviation from quadratic approximation (time series), and components of MH test. These diagnostic measures are discussed in Section~\ref{subsection-diagnostics}, and their use is illustrated via examples in Section~\ref{section-using}.
+\item Convenience of generating multiple samples via repeated calls to \code{sns}. After the first call, the Gaussian fit object (attached as attribute \code{gfit} in the returned value from \code{sns}) is fed back to \code{sns} via argument \code{gfit}, in order to avoid unnecessary fitting of the proposal function at current value.
+\item Collecting diagnostic information such as log-probability time series, acceptance rate, relative deviation from quadratic approximation (time series), and components of MH test. These diagnostic measures are discussed in Section~\ref{subsection-diagnostics}, and their use is illustrated via examples in Section~\ref{section-using}.
 \end{enumerate}
+Note that, when SNS is part of a Gibbs cycle and used in conjunction with other samplers, \code{sns.run} cannot be used since the conditional distribution that must be sampled from changes in each iteration.
 
-The generic methods \code{summary.sns}, \code{plot.sns} and \code{predict.sns} provide diagnostic, visualization, and prediction capabilities, discussed in Sections~\ref{subsection-diagnostics} and \ref{subsection-prediction}, and illustrated via examples in Section~\ref{section-using}.
+The generic methods \code{summary.sns}, \code{plot.sns} and \code{predict.sns} provide diagnostic, visualization, and prediction capabilities. They are discussed in Sections~\ref{subsection-diagnostics} and \ref{subsection-prediction}, and illustrated via examples in Section~\ref{section-using}.
 
 \subsection{Improving convergence and mixing}\label{subsection-convergence-mixing}
-\textbf{NR mode:} Far from the distribution mode, the local multivariate Gaussian fit can be severely different from the PDF, leading to small overlap between the two, low acceptance rate and hence bad convergence. This can be overcome by spending the first few iterations in non-stochastic or NR mode, where instead of drawing from the proposal function we simply accept its mean as the next step. Rather than taking a full Newton step, we have implemented line search~\citep{nocedal2006optim} to ensure convergence to the PDF maximum. To use \code{sns} in NR mode, users can set the argument \code{rnd} to \code{FALSE}. In NR mode, each iteration is guaranteed to increase the log-density. Using the NR mode during the initial burn-in phase is illustrated in Section~\ref{section-using}. In \code{sns.run}, the argument \code{nnr} controls how many initial iterations to be performend in NR mode.
+\textbf{NR mode:} Far from the distribution mode, the local multivariate Gaussian fit can be severely different from the PDF, leading to small overlap between the two, low acceptance rate and hence bad convergence. This can be overcome by spending the first few iterations in non-stochastic or NR mode, where instead of drawing from the proposal function we simply accept its mean as the next step. Rather than taking a full Newton step, we have implemented line search~\citep{nocedal2006optim} to ensure convergence to the PDF maximum. To use \code{sns} in NR mode, users can set the argument \code{rnd} to \code{FALSE}. In NR mode, each iteration is guaranteed to increase the log-density. Using the NR mode during the initial burn-in phase is illustrated in Section~\ref{section-using}. In \code{sns.run}, the argument \code{nnr} controls how many initial iterations will be performed in NR mode.
 
-\textbf{State space partitioning:} Even when near the PDF maximum, the fitted Gaussian can be severely different from the PDF. This can happen if the PDF has a significant third derivative, a phenomenon that we have observed for high-dimensional problems, especially when the number of observations is small. To improve bad mixing in high dimensions, we use a strategy which we refer to as `state space partitioning', where state space is partitioned into disjoint subsets and SNS is applied within each subset, wrapped in Gibbs sampling. This functionality is available via the \code{part} argument, which is a list containing the set of state space dimensions belonging to each subset. Convenience functions \code{sns.make.part} and \code{sns.check.part} allow users to easily create partition lists and check their validity, respectively.
+\textbf{State space partitioning:} Even when near the PDF maximum, the fitted Gaussian can be severely different from the PDF. This can happen if the PDF has a significant third derivative, a phenomenon that we have observed for high-dimensional problems, especially when the number of observations is small. To improve bad mixing in high dimensions, we use a strategy which we refer to as `state space partitioning', where state space is partitioned into disjoint subsets and SNS is applied within each subset, wrapped in a Gibbs cycle. This functionality is available via the \code{part} argument, which is a list containing the set of state space dimensions belonging to each subset. Convenience functions \code{sns.make.part} and \code{sns.check.part} allow users to easily create partition lists and check their validity, respectively.
 
 \subsection{Diagnostics}\label{subsection-diagnostics}
-\pkg{sns} includes a rich set of diagnostics which can be accessed via functions \code{summary.sns} and \code{plot.sns}. Some of these are generic measures applicable to all MCMC chains, some are specific to MH-based MCMC algorithms, and some are even further specialized for SNS as a particular flavor of MH. Where possible, we have used the library \pkg{coda}, but opted to create and maintain an independent set of functions due to their specialized and extended nature.
+\pkg{sns} includes a rich set of diagnostics which can be accessed via functions \code{summary.sns} and \code{plot.sns}. Some of these are generic measures applicable to all MCMC chains, some are specific to MH-based MCMC algorithms, and some are even further specialized for SNS as a particular flavor of MH. Where possible, we have used the library \pkg{coda} and adopted its naming conventions, but opted to create and maintain an independent set of functions due to their specialized and extended nature.
 
 \textbf{MCMC diagnostics:} In \code{summary.sns}, we calculate the usual MCMC chain summaries including mean, standard deviation, quantiles, and effective sample size. We also calculate a sample-based p-value for each coordinate. In \code{plot.sns} we have log-density trace plot, state vector trace plots, effective sample size by coordinate, state vector histograms, and state vector autocorrelation plots.
 
-\textbf{MH diagnostics:} In \code{summary.sns}, we calculate the acceptance rate of MH transition proposals. If \code{mh.diag} flag is set to \code{TRUE}, all 4 components of the MH test (\code{log.p}, \code{log.p.prop}, \code{log.q} and \code{log.q.prop}) are returned as well.
+\textbf{MH diagnostics:} In \code{summary.sns}, we calculate the acceptance rate of MH transition proposals. If \code{mh.diag} flag is set to \code{TRUE}, all 4 components of the MH test (\code{log.p}, \code{log.p.prop}, \code{log.q} and \code{log.q.prop}) for all iterations are returned as well.
 
-\textbf{SNS diagnostics:} In \code{summary.sns}, we return \code{reldev.mean} (if \code{sns.run} was called with \code{mh.diag} set to \code{TRUE}), defined as the average relative deviation of log-density change (with respect to PDF maximum) from quadratic approximation (also constructed at PDF maximum). The location of PDF maximum is extracted from the Gaussian fit in the last iteration under NR mode. The higher this value, the more likely it is for the SNS to exhibit bad mixing. This is illustrated in Section~\ref{section-using}. For \code{reldev.mean} to be valid, the user must ensure that the value of the argument \code{nnr} supplied to \code{sns.run} is sufficiently high to ensure convergence at the end of NR phase.
+\textbf{SNS diagnostics:} In \code{summary.sns}, we return \code{reldev.mean} (if \code{sns.run} was called with \code{mh.diag} set to \code{TRUE}), defined as the average relative deviation of log-density change (with respect to PDF maximum) from quadratic approximation (also constructed at PDF maximum). The location of PDF maximum is extracted from the Gaussian fit in the last iteration under NR mode. The higher this value, the more likely it is for the SNS to exhibit bad mixing. This is illustrated in Section~\ref{section-using}. For \code{reldev.mean} to be valid, the user must ensure that the value of the argument \code{nnr} supplied to \code{sns.run} is sufficiently high to achieve convergence by the end of NR phase. Note that this is generally unfeasible if SNS is part of a Gibbs cycle, and used in conjunction with other samplers, as in this case the conditional distribution that SNS samples from constantly from one iteration to the next.
 
-\subsection{Full Bayesian Prediction}\label{subsection-prediction}
-The function \code{predict.sns} allows for full Bayesian prediction, using a sample-based representation of predictive posterior distribution. It accepts an arbitrary function of state vector as argument \code{fpred}, and applies the function across all samples of state vector, supplied in the first argument, which must be an output of \code{sns.run}. The core philosophy in full Bayesian prediction is to postpone summarization of samples until the last step. For example, rather than supplying the expected values of coefficients into a function, we supply the samples and take the expected value after applying the function. Following this proper approach is important for several reasons:
+\subsection{Full Bayesian prediction}\label{subsection-prediction}
+The function \code{predict.sns} allows for full Bayesian prediction, using a sample-based representation of predictive posterior distribution. It accepts an arbitrary function of state vector as argument \code{fpred}, and applies the function across all samples of state vector, supplied in the first argument, which must be an output of \code{sns.run}. The core philosophy in full Bayesian prediction is to postpone summarization of samples until the last step. For example, rather than supplying the expected values of coefficients into a function, we supply the samples and take the expected value after applying the function. Following this proper approach is important because:
 \begin{enumerate}
 \item Mathematically, an arbitrary function is not commutable with the expected value operator. Therefore, applying expected value early produces incorrect results.
 \item For a similar reason, confidence intervals cannot be propagated through arbitrary functions. Therefore, correct uncertainty measurement also requires a full Bayesian approach.
 \end{enumerate}
+Note that \code{fpred} can be deterministic or stochastic. An example of the latter case is when we need to generate samples from the predictive posterior distribution, and \code{fpred} generates sample(s) from the conditional distribution $p(\hat{y} | \theta)$, where $\hat{y}$ is a new observation (for which we are seeking prediction) and $\theta$ represents the model parameters (can be a vector), for which have used SNS to generate samples. This can be considered a special case of ancestral sampling~\citep{bishop2006pattern}, applied to the following:
+\begin{equation}
+p(\hat{y}) = \int p(\hat{y} \, | \, \theta) \, p(\theta) \, \dd \theta
+\end{equation}
+
+\subsection{Calculation and validation of log-density derivatives}\label{subsection-num-deriv}
+SNS requires log-density to be twice-differentiable and concave. The \pkg{sns} package offers a numerical differentiation capability to circumvent the need to mathematically compute the log-density gradient and Hessian, and to help users determine whether the log-density (likely) satifies the twice-differentiability and concavity requirements.
+
+The functions \code{grad} and \code{hessian} from \pkg{numDeriv} package~\citep{numDeriv2012package} are used for numerical differentiation. Arguments \code{numderiv}, \code{numderiv.method} and \code{numderiv.args} in the \code{sns} and \code{sns.run} functions control the usage and parameters of these functions. Users have three choices with regards to log-density derivatives:
+\begin{enumerate}
+\item \code{fghEval} returns a list with elements \code{f}, \code{g}, and \code{h} for log-density, its gradient and its Hessian, respectively. In this case, users must leave \code{numderiv} at the default of 0 (no numerical differentiation).
+\item \code{fghEval} returns a list with elements \code{f} (log-density) and {g} (gradient), and Hessian is found through numerical differentiation by setting \code{numderiv} to 1.
+\item \code{fghEval} returns the log-density only (no list), and both gradient and Hessian are calculated numerically by setting \code{numDeriv} to 2.
+\end{enumerate}
+A slightly more efficient approach is to do `numerical augmentation' of the log-density once, outside \code{sns}, via the utility function \code{sns.fghEval.numaug}. Section~\ref{subsection-example-log-concavity} contains an example of using numerical derivatives with SNS.
 
 \section[]{Using \pkg{sns}}\label{section-using}
-In this section, we illustrate how \pkg{sns} can be used via several examples. First, we launch an R session and load the \pkg{sns} package as well \pkg{mvtnorm} (used for evaluating the multivariate Gaussia log-density in example 1): 
-<<eval=TRUE>>=
-library(sns)
-library(mvtnorm)
-@
+In this section, we illustrate the core functionalities of \pkg{sns} as well as some of its advanced features via 4 examples. Below is an overview of objectives in each example:
+\begin{enumerate}
+\item Example 1: basic use of \code{sns.run} and \code{summary.sns}, ideal behavior of SNS for multivariate Gaussian PDFs
+\item Example 2: using SNS in random and non-random modes, full Bayesian prediction of mean and actual response
+\item Example 3: state space partitioning for high-dimensional PDFs
+\item Example 4: log-concavity invariance theorem, expander framework for log-density derivatives, log-density validation, numerical differentiation
+\end{enumerate}
+
+Setup details such as platform, OS, and \proglang{R} and package versions can be found in Appendix~\ref{appendix-setup}. To maximize the reproducibility of results for each code segment, we repeatedly fix random seeds throughout the paper (using \code{set.seed()} function).
 
 \subsection{Example 1: Multivariate Gaussian}\label{subsection-example-gaussian}
-Using \pkg{sns} to sample from a multivariate Gaussian is a contrived, but pedagogical, example. Since log-density for a multivariate Gaussian is quadratic, its second-order Taylor series expansion is not approximate but exact. In other words, the proposal function becomes location-independent, and equal to the sampled distribution. This means that 1) the MH test is always accepted, and 2) consecutive samples are completely independent, and hence the resulting chain is no longer Markovian. Of course, since we know how to sample from multivariate Gaussian proposal functions, we might as well directly sample from the multivariate Gaussian distribution. Hence, the pedagogical nature of this example. To utilize \pkg{sns}, we must first implement the log-density and its gradient and Hessian:
+First, we launch an \proglang{R} session and load the \pkg{sns} package as well \pkg{mvtnorm} (used for evaluating the multivariate Gaussia log-density in \code{logdensity.mvg}). We also select a seed for rnadom number generator:
+<<eval=TRUE>>=
+library("sns")
+library("mvtnorm")
+my.seed <- 0
+@
+Using \pkg{sns} to sample from a multivariate Gaussian is a contrived, but pedagogical, example. Since log-density for a multivariate Gaussian is quadratic, its second-order Taylor series expansion is not approximate but exact. In other words, the proposal function becomes location-independent, and equal to the sampled distribution. This means that 1) the MH test is always accepted, and 2) consecutive samples are completely independent, and hence the resulting chain is no longer Markovian. Of course, since we know how to sample from multivariate Gaussian proposal functions, we might as well directly sample from the original multivariate Gaussian distribution. (Hence, the pedagogical nature of this example.) To utilize \pkg{sns}, we must first implement the log-density and its gradient and Hessian:
 <<eval=TRUE>>=
 logdensity.mvg <- function(x, mu, isigsq) {
-  f <- dmvnorm(x = as.numeric(x)
-    , mean = mu, sigma = solve(isigsq), log = TRUE)
+  f <- dmvnorm(x = as.numeric(x),
+    mean = mu, sigma = solve(isigsq), log = TRUE)
   g <- - isigsq %*% (x - mu)
   h <- -isigsq
   return (list(f = f, g = g, h = h))
@@ -229,14 +327,15 @@ logdensity.mvg <- function(x, mu, isigsq) {
 @
 We now draw 500 samples from this log-desity, using pre-specified values for \code{mu} (mean vector) and \code{isigsq} (inverse of the covariance matrix, or precision matrix) in a 3-dimensional state space:
 <<>>=
+set.seed(my.seed)
 K <- 3
 mu <- runif(K, min = -0.5, max = +0.5)
 isigsq <- matrix(runif(K*K, min = 0.1, max = 0.2), ncol = K)
 isigsq <- 0.5*(isigsq + t(isigsq))
 diag(isigsq) <- rep(0.5, K)
 x.init <- rep(0.0, K)
-x.smp <- sns.run(x.init, logdensity.mvg, niter = 500
-  , mh.diag = TRUE, mu = mu, isigsq = isigsq)
+x.smp <- sns.run(x.init, logdensity.mvg, niter = 500,
+  mh.diag = TRUE, mu = mu, isigsq = isigsq)
 @
 Next, we use the \code{summary.sns} function to view some of the diagnostics:
 <<>>=
@@ -247,18 +346,19 @@ As expected, the acceptance rate is 100\%, and there is no deviation from quadra
 In real-world applications, the Gaussian proposal function is only an approximation for the sampled distribution (since log-density is not quadratic), creating the Markovian dependency and less-than-perfect acceptance rate. We study one such example next.
 
 \subsection{Example 2: Bayesian Poisson regression}\label{subsection-example-poisson}
-Generalized Linear Models (GLMs)~\citep{nelder1972generalized} are an important family of statistical models with applications such as risk analysis~\citep{sobehart2000moody}, public health~\citep{azar2011immunologic} and political science~\citep{gelman2007data}. GLMs can be extended to incorporate data sparseness and heterogeneity via the Hierarchical Bayesian framework~\citep{peter2005bayesian} or to account for repeated measurements and longitudinal data via Generalized Linear Mixed Model~\citep{mcculloch2006generalized}. With properly-chosen link functions, many GLMs are known - or can be easily proven - to have globally-concave log-densities with negative-definite Hessian matrices~\citep{gilks1992adaptive,mahani2015expander}. As such, GLMs are excellent candidates for SNS. Embedded in Bayesian frameworks, they continue to enjoy log-concavity assuming the same property holds for prior terms, according to the Bayes' rule and the invariance of concavity for adding functions.
+Generalized Linear Models (GLMs)~\citep{nelder1972generalized} are an important family of statistical models with applications such as risk analysis~\citep{sobehart2000moody}, public health~\citep{azar2011immunologic} and political science~\citep{gelman2007data}. GLMs can be extended to incorporate data sparseness and heterogeneity via the Hierarchical Bayesian framework~\citep{peter2005bayesian} or to account for repeated measurements and longitudinal data via Generalized Linear Mixed Model~\citep{mcculloch2006generalized}. With properly-chosen link functions, many GLMs are known - or can be easily proven - to have globally-concave log-densities with negative-definite Hessian matrices~\citep{gilks1992adaptive}. As such, GLMs are excellent candidates for SNS. Embedded in Bayesian frameworks, they continue to enjoy log-concavity assuming the same property holds for prior terms, according to the Bayes' rule and the invariance of concavity under function addition.
 
-In our second example, we illustrate how to apply \pkg{sns} to the log-likelihood of Poisson regression. As before, we start with constructing the log-density, using the expander framework of \pkg{RegressionFactory} package:
+In our second example, we illustrate how to apply \pkg{sns} to the log-likelihood of Poisson regression. As before, we start with constructing the log-density and its gradient and Hessian, this time using the expander framework of \pkg{RegressionFactory} package\citep{regfacpackage}:
 <<>>=
-library(RegressionFactory)
+library("RegressionFactory")
 loglike.poisson <- function(beta, X, y) {
-  regfac.expand.1par(beta, X = X, y = y
-    , fbase1 = fbase1.poisson.log)
+  regfac.expand.1par(beta, X = X, y = y,
+    fbase1 = fbase1.poisson.log)
 }
 @
 Now we simulate data from the generative model:
 <<>>=
+set.seed(my.seed)
 K <- 5
 N <- 1000
 X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
@@ -268,12 +368,13 @@ y <- rpois(N, exp(X %*% beta))
 For reference, we do a maximum-likelihood (ML) estimation of the coefficients using \code{glm} command:
 <<>>=
 beta.init <- rep(0.0, K)
-beta.glm <- glm(y ~ X - 1, family = "poisson", start = beta.init)$coefficients
+beta.glm <- glm(y ~ X - 1, family = "poisson",
+  start = beta.init)$coefficients
 @
 As mentioned before, \pkg{sns} can be run in non-stochastic mode, which is equivalent to Newton-Raphson optimization with line search. Results should be identical, or very close, to \code{glm} results:
 <<>>=
-beta.sns <- sns.run(beta.init, fghEval = loglike.poisson
-  , niter = 20, nnr = 20, X = X, y = y)
+beta.sns <- sns.run(beta.init, fghEval = loglike.poisson,
+  niter = 20, nnr = 20, X = X, y = y)
 beta.nr <- beta.sns[20, ]
 cbind(beta.glm, beta.nr)
 @
@@ -282,121 +383,389 @@ The primary use-case for \pkg{sns} is not ML estimation, but rather MCMC samplin
 beta.smp <- sns.run(beta.init, loglike.poisson
   , niter = 200, nnr = 20, mh.diag = TRUE, X = X, y = y)
 @
-Examining the log-probability trace plot (Figure~\ref{fig-poisson-lp}) shows an expected pattern: During non-stochastic phase (left of vertical line) log-probability rises steadily while approaching the peak. During MCMC sampling, on the other hand, PDF maximum forms an upper bound for the MCMC movements, and the chain occasionally visits low-probability areas. The plot is created using the following line:
+Examining the log-density trace plot (Figure~\ref{fig-poisson-lp}) shows an expected pattern: During non-stochastic phase (left of vertical line) log-probability rises steadily while approaching the peak. During MCMC sampling, on the other hand, PDF maximum forms an upper bound for the MCMC movements, and the chain occasionally visits low-probability areas. The plot is created using the following line:
 <<label=lp_plot,include=FALSE,echo=TRUE>>=
 plot(beta.smp, select = 1)
 @
 \begin{figure}
-%\begin{center}
 <<label=fig1,fig=TRUE,echo=FALSE>>=
 <<lp_plot>>
 @
-%\end{center}
-\caption{Log-probability trace plot for Poisson regression problem with $K=5$ and $N=1000$. Vertical line separates non-stochastic mode (left, 20 iterations) from stochastic mode (right, 180 iterations).}
+\caption{Log-density trace plot for Poisson regression problem with $K=5$ and $N=1000$. Vertical line separates non-stochastic mode (left, 20 iterations) from stochastic mode (right, 180 iterations).}
 \label{fig-poisson-lp}
 \end{figure}
-The \code{plot.sns} function offers 4 other types of plots, besides the log-probability trace plot. We refer the reader to the package documentation for details. Further diagnostic information can be accessed via the \code{summary.sns} function:
+The \code{plot.sns} function offers 4 other types of plots, besides the log-density trace plot. See package documentation for details. Further diagnostic information can be accessed via the \code{summary.sns} function:
 <<>>=
 summary(beta.smp)
 @
 The \code{summary.sns} function discards the first half of the samples as burn-in by default, before calculating sample statistics and acceptance. This behavior can be controlled via the argument \code{nburnin}. Arguments \code{end} and \code{thin} have behavior similar to their counterparts in the \code{as.mcmc} function of \pkg{coda} package. We observe two numbers in the summary print-out: Firstly, acceptance rate is less than 100\%, contrary to the case with a multivariate Gaussian PDF (example 1). Secondly, the mean relative deviation from quadratic approximation (\code{reldev.mean}) is now non-zero, again reflecting non-Gaussianity of the poisson likelihood PDF. The number (<1\%) is still small, however, leading to high acceptance rate and good mixing of the chain.
 
-Next, we want to predict the response variable in Poisson regression model, given new values of the explanatory variables. We distinguish between two types of prediction: 1) predicting mean response, 2) generating samples from posterior predictive distribution. We illustrate how to do both using the \code{predict.sns} function. We begin by implementing the mean prediction function, which simply applies the inverse link function (exponential here) to the linear predictor. (For better comparison between the two prediction modes, we increase number of samples to 1000)
-<<eval=FALSE>>=
-beta.smp <- sns.run(beta.init, loglike.poisson
-  , niter = 1000, nnr = 20, mh.diag = TRUE, X = X, y = y)
+Next, we want to predict the response variable in Poisson regression model, given new values of the explanatory variables. We distinguish between two types of prediction: 1) predicting mean response, 2) generating samples from posterior predictive distribution. We illustrate how to do both using the \code{predict.sns} function. We begin by implementing the mean prediction function, which simply applies the inverse link function (exponential here) to the linear predictor. (For better comparison between the two prediction modes, we increase number of samples to 1000.)
+<<eval=TRUE>>=
+beta.smp <- sns.run(beta.init, loglike.poisson,
+  niter = 1000, nnr = 20, mh.diag = TRUE, X = X, y = y)
 predmean.poisson <- function(beta, Xnew) exp(Xnew %*% beta)
 @
 The following single line performs sample-based prediction of mean response (using \code{X} in lieu of \code{Xnew} for code brevity):
-<<eval=FALSE>>=
-ymean.new <- predict(beta.smp, predmean.poisson
-  , nburnin = 100, Xnew = X)
+<<eval=TRUE>>=
+ymean.new <- predict(beta.smp, predmean.poisson,
+  nburnin = 100, Xnew = X)
 @
-\code{ynew} is a matrix of \code{N} (1000) rows and \code{niter - nburnin} (900) columns. Each row corresponds to an observation (one row of \code{Xnew}), and each column corresponds to a prediction sample (one row of \code{beta.smp} after burn-in).
+\code{ymean.new} is a matrix of \code{N} (1000) rows and \code{niter - nburnin} (900) columns. Each row corresponds to an observation (one row of \code{Xnew}), and each column corresponds to a prediction sample (one row of \code{beta.smp} after burn-in).
 
 We can also generate samples from posterior predictive distribution as follows:
-<<eval=FALSE>>=
+<<eval=TRUE>>=
 predsmp.poisson <- function(beta, Xnew)
   rpois(nrow(Xnew), exp(Xnew %*% beta))
 ysmp.new <- predict(beta.smp, predsmp.poisson
   , nburnin = 100, Xnew = X)
 @
 Comparing prediction summaries is illuminating:
-<<eval=FALSE>>=
+<<eval=TRUE>>=
 summary(ymean.new)
+@
+%<<echo=FALSE>>=
+%load("summs.pred")
+%print(summ.ymean)
+%@
+<<eval=TRUE>>=
 summary(ysmp.new)
 @
-<<echo=FALSE>>=
-load("summs.pred")
-print(summ.ymean)
-print(summ.ysmp)
-@
+%<<echo=FALSE>>=
+%print(summ.ysmp)
+%@
 
-In the limit of infinite samples, the mean predictions from the two methods will be equal, and they are quite close based on 900 samples above. However, standard deviation of predictions is much larger for \code{predsmp.poisson} compared to \code{predmean.poisson}, as the former combines the uncertainty of coefficient values (represented in the \code{sd} values for \code{beta}'s) with the uncertainty of samples from Poisson distribution around the mean, i.e. the \code{sd} of Poisson distribution. Also note that, as expected, quantiles for \code{predsmp.poisson} are discrete since the predictions are discrete, while the quantiles for \code{predmean.poisson} are continuous as the predictions are continuous in this case.
+In the limit of infinite samples, the mean predictions from the two methods will be equal, and they are quite close based on 900 samples above. However, standard deviation of predictions is much larger for \code{predsmp.poisson} compared to \code{predmean.poisson}, as the former combines the uncertainty of coefficient values (represented in the \code{sd} values for \code{beta}'s) with the uncertainty of samples from Poisson distribution around the mean, i.e., the \code{sd} of Poisson distribution. Also note that, as expected, quantiles for \code{predsmp.poisson} are discrete since predictions are discrete, while the quantiles for \code{predmean.poisson} are continuous as predictions are continuous in this case.
+
+As mentioned in Section~\ref{subsection-proposal}, there are two important cases where the Gaussian proposal function used in SNS deviates significantly from the underlying PDF, resulting in poor mixing of the MCMC chain. First, when sample size is small, and second when state space dimensionlity is high. The first scenario is addressed in performance benchmarking experiments of Section~\ref{section-performance}. Below we focus on SNS for high-dimensional PDFs.
 
 \subsection{Example 3: High-dimensional Bayesian Poisson regression}\label{subsection-example-highD}
-Contrary to standard Metropolis variants with multivariate Gaussians centered on current point, SNS is an aggressive, non-local MCMC algorithm as it seeks to construct a global, Gaussian approximation of the PDF. Under favorable conditions, this can lead to uncorrelated chains and efficient sampling, with the extreme case of perfectly uncorrelated samples for a multivariate Gaussian distribution. An important pathological case arises when the state space dimensionality is high. Continuing with the Poisson regression example, we increase $K$ from 5 to 100, while holding $N=1000$. To illustrate that the problem is not covergence but mixing, we explicitly use the \code{glm} estimate (mode of PDF) as the initial value for the MCMC chain:
-<<eval=FALSE>>=
+As discussed in Section~\ref{subsection-proposal}, the multivariate Gaussian proposal in SNS tends to lose accuracy as state space dimensionality rises, leading to poor mixing of the resulting MCMC chain. Continuing with the Poisson regression example, we increase $K$ from 5 to 100, while holding $N=1000$. To illustrate that the problem is not covergence but mixing, we explicitly use the \code{glm} estimate (mode of PDF) as the initial value for the MCMC chain:
+<<eval=TRUE>>=
+set.seed(my.seed)
 K <- 100
 X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
 beta <- runif(K, -0.5, +0.5)
 y <- rpois(N, exp(X %*% beta))
 beta.init <- glm(y ~ X - 1, family = "poisson")$coefficients
-beta.smp <- sns.run(beta.init, loglike.poisson
-  , niter = 100, nnr = 10, mh.diag = TRUE, X = X, y = y)
+beta.smp <- sns.run(beta.init, loglike.poisson,
+  niter = 100, nnr = 10, mh.diag = TRUE, X = X, y = y)
 summary(beta.smp)
 @
-<<echo=FALSE>>=
-load("summs")
-print(summ.nopart)
-@
+%<<echo=FALSE>>=
+%load("summs")
+%@
+%print(summ.nopart)
 
-We see a significant drop in acceptance rate as well as effective sample sizes for the coefficients. Also note that mean relative deviation from quadratic approximation is now nearly 10x larger than the value for $K=5$. To improve mixing, we use the `state space partitioning' strategy of \pkg{sns}, available via the \code{part} argument of \code{sns} and \code{sns.run}. This leads to SNS sampling of subsets of state space wrapped in Gibbs cycles, with each subset being potentially much lower-dimensional than the original, full space. This strategy can significantly improve mixing:
-<<eval=FALSE>>=
-beta.smp.part <- sns.run(beta.init, loglike.poisson
-  , niter = 100, nnr = 10, mh.diag = TRUE
-  , part = sns.make.part(K, 10), X = X, y = y)
+We see a significant drop in acceptance rate as well as effective sample sizes for the coefficients. Also note that mean relative deviation from quadratic approximation is much larger than the value for $K=5$. To improve mixing, we use the `state space partitioning' strategy of \pkg{sns}, available via the \code{part} argument of \code{sns} and \code{sns.run}. This leads to SNS sampling of subsets of state space wrapped in Gibbs cycles, with each subset being potentially much lower-dimensional than the original, full space. This strategy can significantly improve mixing. Below we use the function \code{sns.make.part} to partition the 100-dimensional state space into 10 subsets, each 10-dimensional:
+<<eval=TRUE>>=
+beta.smp.part <- sns.run(beta.init, loglike.poisson,
+  niter = 100, nnr = 10, mh.diag = TRUE,
+  part = sns.make.part(K, 10), X = X, y = y)
 summary(beta.smp.part)
 @
-<<echo=FALSE>>=
-print(summ.part)
-@
+%<<echo=FALSE>>=
+%print(summ.part)
+%@
 
 Notice the improved acceptance rate as well as effective sample sizes. A comparison of log-probability trace plots confirms better mixing after convergence to PDF mode (see Figure~\ref{fig-poisson-lp-sbs}).
-<<eval=FALSE>>=
+%<<eval=FALSE>>=
+<<label=ssp_plot,include=FALSE,echo=TRUE>>=
 par(mfrow = c(1,2))
 plot(beta.smp, select = 1)
 plot(beta.smp.part, select = 1)
 @
-\begin{figure}[H]
-\vspace{6pc}
-\includegraphics[scale=0.75]{figs.pdf}
-\caption[]{Comparison of log-probability trace plots for $N=1000$ and $K=100$, without (left) and with (right) state space partitioning using 10 subsets.}
+\begin{figure}%[H]
+<<label=fig1,fig=TRUE,echo=FALSE>>=
+<<ssp_plot>>
+@
+%\vspace{6pc}
+%\includegraphics[scale=0.75]{figs.pdf}
+\caption[]{Comparison of log-density trace plots for Bayesian Poisson regression with $N=1000$ and $K=100$, without (left) and with (right) state space partitioning using 10 subsets.}
 \label{fig-poisson-lp-sbs}
 \end{figure}
 
-%\subsection{Example 4: Embedding SNS in Gibbs framework}\label{subsection-example-embed}
-%For many posterior distributions, log-concavity does not hold, or cannot be proven, over the entire state space. Instead, this property may exist within a subset of the state space. In such cases, one can use SNS in conjunction with other, more generic samplers such as slice sampler, embedded in Gibbs cycles. We illustrate this use-case in our last example.
+\subsection{Example 4: Heteroskedastic linear regression}\label{subsection-example-log-concavity}
+For our last example, we study MCMC sampling of log-likelihood for heteroskedastic linear regression, where both mean and variance of probability distribution for response are dependent on a set of covariates. We cover several advanced topics in this examples: 1) application of invariance theorem (Section~\ref{subsection-log-concavity}), 2) rapid construction of analytical functions for gradient and Hessian, 3) validation of log-density, 4) numerical calculation of derivatives, and 5) combining SNS with other samplers in Gibbs framework. The model can be formally stated as:
+\begin{equation}\label{eq-linreg-het}
+y_i \sim \N (\xx_i^t \bbeta \, , \, e^{\zz_i^t \ggamma}),
+\end{equation}
+where $\N(\mu, \sigma^2)$ is the normal distribution with mean $\mu$ and variance $\sigma^2$, $\xx_i$ and $\zz_i$ are vectors of covariates (explaining the mean and variance, respectively) for the $i$'th observation, $y_i$ is the response variable for the $i$'th observation, and $\bbeta$ and $\ggamma$ are vectors of coefficients for mean and variance. From Eq.~\ref{eq-linreg-het}, we can construct the following log-likelihood function:
+<<>>=
+loglike.linreg.het <- function(coeff, X, Z, y) {
+  K1 <- ncol(X)
+  K2 <- ncol(Z)
+  beta <- coeff[1:K1]
+  gamma <- coeff[K1 + 1:K2]
+  
+  mu <- X %*% beta
+  sigma <- sqrt(exp(Z %*% gamma))
+  f <- sum(dnorm(y, mu, sigma, log = TRUE))
+  
+  return (f)
+}
+@
+Next, we simulate some data using the generative model:
+<<>>=
+set.seed(my.seed)
+K1 <- 5
+K2 <- 5
+N <- 1000
+X <- matrix(runif(N * K1, -0.5, +0.5), ncol = K1)
+Z <- matrix(runif(N * K2, -0.5, +0.5), ncol = K2)
+beta <- runif(K1, -0.5, +0.5)
+gamma <- runif(K1, -0.5, +0.5)
+mu <- X %*% beta
+var <- exp(Z %*% gamma)
+y <- rnorm(N, X %*% beta, sd = sqrt(var))
+@
+Before sampling from the log-density, we perform validation tests on it, using the utility function \code{sns.check.logdensity}. For \code{blocks} parameter, we focus on full Hessian as well as blocks corresponding to \code{beta} and \code{gamma}:
+<<eval=TRUE>>=
+coeff.init <- rep(0.0, K1 + K2)
+check.logdensity <- sns.check.logdensity(coeff.init, loglike.linreg.het
+  , X = X, Z = Z, y = y, dx = 1, nevals = 10
+  , blocks = list(1:(K1+K2), 1:K1, K1 + 1:K2))
+check.logdensity
+@
+%<<echo=FALSE>>=
+%source("sns.methods.R") # remove this after upgrading sns package
+%load("check.logdensity")
+%print(check.logdensity)
+%@
+(In real applications, \code{nevals} must be increased to a number larger than 10.) The diagnostics output indicates that 1) log-density outputs are dimensionally valid, 2) function, gradient, and Hessian are finite for all 100 points evaluated, and 3) log-density Hessian (and its specified blocks) is negative definite for all points evaluated.
 
-\section{Summary}\label{section-summary}
-In this paper we presented \pkg{sns}, an \proglang{R} package for Stochastic Newton Sampling of twice-differentiable, log-concave PDFs, where a multivariate Gaussian resulting from second-order Taylor series expansion of log-density is used as proposal function in a Metropolis-Hastings framework. Using an initial non-stochastic mode, equivalent to Newton-Raphson optimization with line search, allows the chain to rapidly converge to high-density areas, while `state space partitioning', Gibbs sampling of full state space in lower-dimensional blocks, allows SNS to overcome mixing problems while sampling from high-dimensional PDFs. There are several opportunities for further research and development.
+Since the log-density for this problem falls under the `exchangeable regression' category, the framework described in Section~\ref{subsection-log-concavity} can be applied for assessing concavity (Theorem~\ref{theorem:concav_1}) and constructing the derivatives (Eqn.~\ref{eq-gradient} and \ref{eq-hessian}). The log-density defined by \code{loglike.linreg.het} can be translated into the following expression for contribution of each data point towards log-density (ignoring constant terms):
+\begin{align}\label{eq-linreg-het-fi}
+f_i(\mu, \eta) = -\frac{\eta}{2} - \frac{(\mu - y_i)^2}{2} e^{-\eta},
+\end{align}
+where $\mu$ and $\eta$ are the linear predictors which assume values $\xx_i^t \bbeta$ and $\zz_i^t \ggamma$, respectively, for observation $i$. According to Theorem~\ref{theorem:concav_1}, a sufficient condition for concavity of the log-density is that the Hessian of $f_i$'s are negative-definite, for $i=1,\hdots,N$, where $N$ is the number of observations. Differentiating Eq.~\ref{eq-linreg-het-fi} readily leads to the following expression for the Hessian:
+\begin{align}
+h_i = e^{-\eta} \, \left[ \begin{array}{cc} -1 & \mu - y_i \\ \mu - y_i & -\frac{(\mu - y_i)^2}{2} \end{array} \right].
+\end{align}
+While the diagonal elements of $h_i$ are both negative, indicating that $\bbeta$ and $\ggamma$ blocks are negative-definite, but the full Hessian cannot be proven to have the same property: According to Silvester's criterion for negative-definiteness, the second leading principal minor must be positive ($(-1)^2 = 1$). From  Eq.~\ref{eq-linreg-het-fi}, however, we see that
+\begin{align}
+|h_i| = -\frac{(\mu - y_i)^2}{2} e^{-2 \eta} \leq 0.
+\end{align}
+The above result does not contradict the output of \code{sns.check.logdensity}: On the one hand, Theorem~\ref{theorem:concav_1} provides only a sufficient set of conditions. On the other hand, the emipirical checks performed by the software are limited to a finite set of points in the state space, and thus do not lead to any guarantees of negative definiteness everywhere.
 
-\textbf{Beyond twice-differentiability and log-concavity:} Current version of SNS requires the log-density to be twice-differentiable and concave. In many real-world application, the posterior PDF does not have a negative-definite Hessian, or it cannot be proven to have such a property. In such cases, SNS would not be applicable to the entire PDF. However, if one can identify blocks within the full Hessian that does enjoy such property, then SNS can be combined with other, more generic sampling algorithms such as slice sampler or HMC, all embedded in a Gibbs cycle. The implementation would be similar to that of state space partitioning approach in \pkg{sns}, but replacing SNS with alternative samplers for some subsets. An alternative approach is discussed in~\cite{geweke2001bayesian} in the context of state-space models, where non-concave cases are handled by utilizing exponential and uniform distributions. Convergence and mixing properties of such extensions to general cases must be carefully studied. An important situation where twice-differentiability is violated is in the presence of boundary conditions. The current SNS algorithm assumes unconstrained state space. One way to deal with constrained subspaces is, again, to mix and match SNS and other samplers within Gibbs framework. For example, the slice sampler algorithm implemented in \pkg{MfUSampler} is capable of dealing with boxed constraints. It can therefore be assigned to subspaces with constraints, and the unconstrained subspaces can be handled by SNS. Further research is needed in order to relax twice-differentiability and log-concavity requirements for SNS.
+While we can certainly try to sample from the full log-density using SNS, a safer option is to break down the full state space into subspaces corresponding to $\bbeta$ and $\ggamma$, apply SNS to each subspace, and wrap these two steps in a Gibbs cycle. This will work because we have theoretical guarantee that the subspace Hessians are both negative-definite, as indicated by the diagonal elements of $h_i$'s. To construct the derivatives for these two state subspaces, we can use the \pkg{RegressionFactory} expander framework in two ways: First, we can supply the base function \code{fbase2.gaussian.identity.log} to \code{regfac.expand.2par} and extract the subspace components from its output. This is easy to implement but is computationally inefficient since gradient and Hessian for the full state space are calculated during sampling from each subspace. Secondly, we can implement base functions for each subspace from scratch. For brevity of presentation, we opt for the first approach here:
+<<>>=
+loglike.linreg.het.beta <- function(beta, gamma, X, Z, y) {
+  K1 <- length(beta)
+  ret <- regfac.expand.2par(c(beta, gamma), X, Z, y
+    , fbase2 = fbase2.gaussian.identity.log)
+  return (list(f = ret$f, g = ret$g[1:K1], h = ret$h[1:K1, 1:K1]))
+}
+loglike.linreg.het.gamma <- function(gamma, beta, X, Z, y) {
+  K1 <- length(beta)
+  K2 <- length(gamma)
+  ret <- regfac.expand.2par(c(beta, gamma), X, Z, y
+    , fbase2 = fbase2.gaussian.identity.log)
+  return (list(f = ret$f, g = ret$g[K1 + 1:K2]
+           , h = ret$h[K1 + 1:K2, K1 + 1:K2]))
+}
+@
+Having defined the subspace log-densities, we implement the Gibbs cycle:
+<<>>=
+nsmp <- 100
+beta.iter <- rep(0.0, K1)
+gamma.iter <- rep(0.0, K2)
+beta.smp <- array(NA, dim = c(nsmp, K1))
+gamma.smp <- array(NA, dim = c(nsmp, K1))
+for (n in 1:nsmp) {
+  beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+    , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+  gamma.iter <- sns(gamma.iter, loglike.linreg.het.gamma
+    , beta = beta.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+  beta.smp[n, ] <- beta.iter
+  gamma.smp [n, ] <- gamma.iter
+}
+beta.est <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+gamma.est <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+cbind(beta, beta.est)
+cbind(gamma, gamma.est)
+@
+In the above example, both $\bbeta$ and $\ggamma$ subspaces are log-concave and thus we could use SNS for sampling from both inside the Gibbs cycle. In some problems, we may need to combine SNS with other samplers that do not require log-concavity. This is illustrated next, where we use slice sampler for $\ggamma$ subspace, using the \pkg{MfUSampler} package~\citep{mahani2014mfusampler}.
+<<>>=
+library(MfUSampler)
+loglike.linreg.het.gamma.fonly <- function(gamma, beta, X, Z, y) {
+  return (regfac.expand.2par(c(beta, gamma), X, Z, y
+    , fbase2 = fbase2.gaussian.identity.log, fgh = 0))
+}
+beta.iter <- rep(0.0, K1)
+gamma.iter <- rep(0.0, K2)
+for (n in 1:nsmp) {
+  beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+    , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+  gamma.iter <- MfU.Sample(gamma.iter, loglike.linreg.het.gamma.fonly
+    , beta = beta.iter, X = X, Z = Z, y = y)
+  beta.smp[n, ] <- beta.iter
+  gamma.smp [n, ] <- gamma.iter
+}
+beta.est.mix <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+gamma.est.mix <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+cbind(beta, beta.est.mix)
+cbind(gamma, gamma.est.mix)
+@
 
-\textbf{Optimized state space partitioning:}
+Finally, we illustrate the use of numerical differentiation capabilities in \code{sns}, using the utility function \code{sns.check.logdensity}. We switch back to using SNS with $\ggamma$ subspace, but use \code{loglike.linreg.het.gamma.fonly}, and compute gradient and Hessian numerically, rather than analytically. Rather than requesting log-density augmentation with numerical derivatives to be performed once every iteration inside \code{sns}, we perform this once outside the loop, using \code{sns.fghEval.numaug}:
+<<eval=TRUE>>=
+loglike.linreg.het.gamma.numaug <- 
+  sns.fghEval.numaug(loglike.linreg.het.gamma.fonly, numderiv = 2)
+beta.iter <- rep(0.0, K1)
+gamma.iter <- rep(0.0, K2)
+for (n in 1:nsmp) {
+  beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+    , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+  gamma.iter <- sns(gamma.iter, loglike.linreg.het.gamma
+    , beta = beta.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+  beta.smp[n, ] <- beta.iter
+  gamma.smp [n, ] <- gamma.iter
+}
+beta.est.num <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+gamma.est.num <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+cbind(beta, beta.est.num)
+cbind(gamma, gamma.est.num)
+@
 
-\textbf{Performance benchmarking:}
+\section{Performance benchmarking}\label{section-performance}
+For log-densities with negative-definite Hessian, SNS can be an efficient MCMC algorithm. As mentioned in Section~\ref{subsection-log-concavity}, many members of the exponential family belong in this category. In this section, we present some benchmarking results that help clarify the strengths and weaknesses of SNS vis-a-vis other sampling techniques, and thus provide empirical guidance for practitioners in choosing the right sampling algorithm for their problem.
+
+In Table~\ref{tbl:benchmark}, we compare SNS against three alternative sampling algorithms: 1) univariate slice sampler with stepout and shrinkage~\citep{neal2003slice} or `slicer', 2) adaptive rejection sampling~\citep{gilks1992adaptive} or `ARS', which is another univariate sampler applicable to log-concave distributions, and 3) adaptive Metropolis~\citep{roberts2009examples} or 'AM' using a multivariate Gaussian mixture proposal function. Performance is measured in `independent samples per second', which is simply effective sample size divided by CPU time. We see that, for all three distributions studied - binomial, Poisson, and exponential - SNS achieves the best performance among all samplers, for this set of parameters: 1000 observations, 10 variables, and negligible correlation structure in the design matrix.
+
+\begin{table}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llcccccc}
+\hline \hline
+Family (link) & & SNS & Slicer & ARS & AM & Speedup \\
+\hline
+Bernoulli (logit) & Time (sec) & 14.4 & 90.8 & 281.4 & 19.5 & \\
+ & ESS & 7935 & 9401 & 9659 & 1551 & \\
+ & Independent Samples / sec & 553 & 103 & 34 & 80 & 5.4x\\
+\hline
+Poisson (log) & Time (sec) & 13.9 & 73.1 & 264.6 & 15.4 & \\
+ & ESS & 6146 & 9523 & 9430 & 2514 & \\
+ & Independent Samples / sec & 444 & 130 & 36 & 164 & 2.7x\\
+\hline
+Exponential (log) & Time (sec) & 13.9 & 73.6 & 273.1 & 15.4 & \\
+ & ESS & 5890 & 9650 & 9574 & 2364 & \\
+ & Independent Samples / sec & 423 & 131 & 35 & 154 & 2.7x\\
+\hline \hline
+\end{tabular}
+}
+\caption{Performance comparison of SNS against 3 other sampling techniques, using different probability distributions in a generalized linear model. In all cases, number of observations ($N$) is 1000, number of variables ($K$) is 10, and 10,000 samples were collected. SNS = stochastic Newton sampler; Slicer = univariate slice sampler with stepout and shrinkage; ARS = adaptive rejection sampling; AM = adaptive Metropolis. \proglang{R} package \pkg{MfUSampler} was used for Slicer and ARS, while \pkg{SamplerCompare} was used for AM. Effective sample size (ESS) was calculated using the `Initial Sequence Estimators' method~\citep{thompson2010comparison}. All tuning parameters of samplers are at their default values in their respective packages.}
+\label{tbl:benchmark}
+\end{table}
+
+As discussed before, we expect SNS performance to deteriorate for small data sizes where deviation of sampled distribution from a Gaussian approximation is more significant. This point is illustrated in Figure~\ref{fig-benchmark} (left panels), where the performance of SNS, slicer, and AM are compared over a range of values for $N$ ($K=10$ and no correlation). We see that, while for $N > 200$, SNS has a clear advantage, slicer and AM tend to perform better for smaller data sets. Theoretical support for the univariate case is provided in Appendix~\ref{appendix-mixing-n}.
+
+We had also pointed out that a weakness of univariate samplers such as slicer is when the sampled distribution exhibits strong correlations. This can be induced indirectly by increasing correlation in the matrix of covariates. As seen in Figure~\ref{fig-benchmark} (right panels), SNS performs rather steadily with increased correlation, while the performance of slicer and AM - particularly slicer - degrade as correlation increases.
+
+Based on our benchmarking results, we recommend that SNS be considered as a primary MCMC sampling technique for log-concave distributions, moderate to large data, and particularly when significant correlation among covariates is suspected.
+
+\begin{figure}
+\centering
+\begin{tabular}{cc}
+\subfloat{\includegraphics[width=2.75in]{fig_bench_N_binomial.pdf}} &
+\subfloat{\includegraphics[width=2.75in]{fig_bench_corr_binomial.pdf}} \\ 
+\subfloat{\includegraphics[width=2.75in]{fig_bench_N_poisson.pdf}} &
+\subfloat{\includegraphics[width=2.75in]{fig_bench_corr_poisson.pdf}} \\ 
+\subfloat{\includegraphics[width=2.75in]{fig_bench_N_exponential.pdf}} &
+\subfloat{\includegraphics[width=2.75in]{fig_bench_corr_exponential.pdf}}
+\end{tabular}
+\caption{Impact of data size (left panels) and covariate correlation (right panels) on performance of SNS, slicer, and AM for binomial, Poisson, and exponential regression log-densities. Covariate vectors, forming rows of the covariate matrix (\code{X}), are sampled from multivariate Gaussian dsitribution with .}
+\label{fig-benchmark}
+\end{figure}
+
+\section{Discussion}\label{section-summary}
+In this paper we presented \pkg{sns}, an \proglang{R} package for Stochastic Newton Sampling of twice-differentiable, log-concave PDFs, where a multivariate Gaussian resulting from second-order Taylor series expansion of log-density is used as proposal function in a Metropolis-Hastings framework. Using an initial non-stochastic mode, equivalent to Newton-Raphson optimization with line search, allows the chain to rapidly converge to high-density areas, while `state space partitioning', Gibbs sampling of full state space wrapping SNS sampling of lower-dimensional blocks, allows SNS to overcome mixing problems while sampling from high-dimensional PDFs. There are several opportunities for further research and development, which we discuss below.
+
+\textbf{Beyond twice-differentiability and log-concavity:} Current version of SNS requires the log-density to be twice-differentiable and concave. In many real-world application, the posterior PDF does not have a negative-definite Hessian, or it cannot be proven to have such a property. In such cases, SNS would not be applicable to the entire PDF (but perhaps to subspaces, as illustrated in Example 4). A potential solution is discussed in~\cite{geweke2001bayesian} in the context of state-space models, where non-concave cases are handled by utilizing exponential and uniform proposal distributions. Convergence and mixing properties of such extensions to general cases must be carefully studied.
+
+An important situation where twice-differentiability is violated is in the presence of boundary conditions. The current SNS algorithm assumes unconstrained state space. One way to deal with constrained subspaces is, again, to mix and match SNS and other samplers within Gibbs framework. For example, the slice sampler algorithm implemented in \pkg{MfUSampler} is capable of dealing with boxed constraints. It can therefore be assigned to subspaces with constraints, and the unconstrained subspaces can be handled by SNS. Further research is needed in order to relax twice-differentiability and log-concavity requirements for SNS.
+
+\textbf{Implementation Efficiency:} The majority of time during typical applications of MCMC sampling is spent on evaluating the log-density and its derivatives. In particular, for Stochastic Newton Sampler, computing the Hessian matrix is often the most time-consuming step, which is O($N \times K^2$) where $N$ is the number of observations and $K$ is the number of attributes in a statistical model with i.i.d observations. In \code{sns} function, this step is performed by user-supplied function \code{fghEval}. On the other hand, the sampling algorithm itself is computationally dominated by O($K^3$) steps such as Cholesky factorization of the Hessian (inside \code{fitGaussian} or \code{rmvnorm}). As long as $K$ is much smaller than $N$, therefore, the end-to-end process is dominated by \code{fghEval}. A notable exception will be applications with `wide data' such as those encountered in DNA microarray analysis. Therefore, the best way to improve the efficiency of SNS is for the user to supply a high-performance \code{fghEval} function to \code{sns}, e.g., through compiled code, parallelization, etc.
+
+Computational implications of subset size during state space partitioning require more attention as well. In particular, the current implementation in \pkg{sns} calls the same underlying, full-space \code{fghEval} function. This means within each subset, full Hessian is calculated, which is computationally wasteful. This naive approach neutralizes a potential computational advantage of state space partitioning, i.e., reducing the cost of Hessian evaluation which goes up quadratically with state space dimensionality. A more sophisticated approach would require the user to supply a function and derivative evaluation routine that produces the derivatives over state subspaces. Here, the tradeoff is between computational efficiency vs. a more complex API for function evaluation, whose implementation for each problem would be the responsibility of the user.
+
+Also, more comprehensive analysis - theoretical and empirical - is needed to determine when/how to partition the state space. The correlation structure of the state space might need to be taken into account while assigning coordinates to subsets, as well as data dimensions such as number of observations. Our preliminary, uni-dimensional analysis shows that mixing improves with $N^{1/2}$, where $N$ is the number of independently-sampled observations in a regression problem.
+
+\appendix
+
+\section{Setup}\label{appendix-setup}
+Below is the \pkg{R} session information used for this entire paper. Note that the \pkg{sns} package used was built under \proglang{R} version 3.3.0.
+<<>>=
+sessionInfo()
+@
 
 
-There are several opportunities for further research and development:
-\begin{enumerate}
-\item Mixing properties of SNS must be better studied. Preliminary, one-dimensional analysis has provided sufficient conditions for the chain not to diverge too much from the distribution mode, but extension to the real-world, high-dimensional case remains to be done. This understanding can in turn be used to better select the size of state space blocks in the partitioning strategy.
-\item Currently, SNS requires strict global log-concavity for the PDF. Extending the algorithm to more general cases can improve its usefulness.
-\item Currently, SNS cannot handle boundary conditions. Instead, they must be implemented via variable transformations, such as link functions in GLM models.
-\item Impact of data centering and scaling on convergence and mixing of chains, not just for SNS but for MCMC algorithms in general, including Gibbs sampling.
-\end{enumerate}
+\section{Invariance of Hessian definiteness under linear transformations}\label{appendix-definiteness-invariance}
+To prove negative-definiteness of $\HH (\bbeta)$ (hereafter referred to as $\HH$ for brevity), we seek to prove that $ \pp^t \HH \pp$ is negative for all non-zero $\pp$ in $\mathbb{R}^{\sum_j K^j}$. We begin by decomposing $\pp$ into $J$ subvectors of length $K^j$ each:
+\begin{equation} \label{eq:pp}
+\pp = (\pp^{1,t}, \dots, \pp^{J,t})^t.
+\end{equation}
+We now have:
+\begin{eqnarray}
+\pp^t \HH \pp &=& \sum_{j,j'=1}^J \pp^{j,t} \, \frac{\partial^2 L}{\partial \bbeta^j \partial \bbeta^{j'}} \, \pp^{j'} \\
+&=& \sum_{j,j'} \pp^{j,t} \left( \sum_n \frac{\partial^2 f_n}{\partial u^j \partial u^{j'}} \: . \: (\xx_n^j \otimes \xx_n^{j'}) \right) \pp^{j'} \\
+&=& \sum_n \sum_{j,j'} \frac{\partial^2 f_n}{\partial u^j \partial u^{j'}} \: \pp^{j,t} \: (\xx_n^j \otimes \xx_n^{j'}) \: \pp^{j'}
+\end{eqnarray}
+If we define a set of new vectors $\qq_n$ as:
+\begin{eqnarray}
+\qq_n \equiv \begin{bmatrix} \pp^{1,t} \xx_n^1 & \cdots & \pp^{J,t} \xx_n^J \end{bmatrix},
+\end{eqnarray}
+and use $\hh_n$ to denote the $J$-by-$J$ Hessian of $f_n$:
+\begin{equation}
+\hh_n \equiv [ h_n^{jj'} ]_{j,j'=1,\dots,J},
+\end{equation}
+we can write:
+\begin{equation}
+\pp^t \HH \pp = \sum_n \qq_n^t \, \hh_n \, \qq_n.
+\end{equation}
+Since all $\hh_n$'s are assumed to be negative definite, all $\qq_n^t \, \hh_n \, \qq_n$ terms must be non-positive. Therefore, $\pp^t \HH \pp$ can be non-negative only if all its terms are zero, which is possible only if all $\qq_n$'s are zero vectors. This, in turn, means we must have $\pp^{j,t} \xx_n^j = 0,\:\: \forall \, n,j$. In other words, we must have $\XX^j \pp^j = \emptyset,\:\: \forall \, j$. This means that all $\XX^j$'s have non-singleton nullspaces and therefore cannot be full-rank, which contradicts our assumption. Therefore, $\pp^T \HH \pp$ must be negative. This proves that $\HH$ is negative definite.
+
+\section{SNS mixing and number of observations}\label{appendix-mixing-n}
+Efficient mixing in SNS depends on absence of large changes to the mean and std of the proposal function (relative to the std calculated at mode) as the chain moves within a few std's of the mode. To quantify this, we begin with the Taylor series expansion of log-density around its mode $\mu_0$ (where $f'(\mu_0)=0$), this time keeping the third-order term as well (and restricting our analysis to univariate case):
+\begin{eqnarray}
+f(x) &\approx& f(\mu_0) - \frac{1}{2}\tau_0(x-\mu_0)^2 + \frac{1}{6}\kappa_0(x-\mu_0)^3, \\
+\tau_0 &\equiv& -f''(\mu_0) \\
+\kappa_0 &\equiv& f'''(\mu_0)
+\end{eqnarray}
+Applying the Newton step to the above formula, we can arrive at mean $\mu(x)$ and precision $\tau(x)$ of the fitted Gaussian at $x$:
+\begin{subequations}
+\begin{eqnarray}
+\mu(x) &=& x - \frac{f'(x)}{f''(x)} \\
+&=& x - \frac{-\tau_0 (x-\mu_0) + \frac{1}{2} \kappa (x-\mu_0)^2}{-\tau_0 + \kappa_0 (x-\mu_0)} \\
+\tau(x) &=& \tau_0 + \kappa_0 (x-\mu_0)
+\end{eqnarray}
+\end{subequations}
+We now form the following dimensionless ratios, which we need to be much smaller than 1 in order to have good mixing for MH-MGT:
+\begin{eqnarray}
+|\mu(x)-\mu_0| \: . \: \tau_0 \ll 1 \\
+|\tau(x)-\tau_0| / \tau_0 \ll 1
+\end{eqnarray}
+when $|x-\mu_0| \: . \: \tau_0 \sim O(1)$. Some algebra shows that both these conditions are equivalent to:
+\begin{equation} \label{eq:mixing-condition}
+\eta_0 \equiv |\kappa_0| \: . \: \tau_0^{-3/2} \ll 1
+\end{equation}
+%In the example of Figure \ref{fig:bern-converge}, we can calculate $\eta_0 \simeq 0.71$, which suggests less-than-excellent mixing according to our rule-of-thumb.
+
+In real-world applications, we are interested in efficient sampling from computationally-expensive log-densities. In particular, statistical models often involve many independent observations, each contributing an additive term to the log-likelihood function:
+\begin{equation}
+f(x) = \sum_{i=1}^N f_i(x)
+\end{equation}
+We can therefore re-write equation \eqref{eq:mixing-condition} as:
+\begin{equation}
+\eta_0 = |\sum_{i=1}^N f'''_i(x)| \: . \: [\sum_{i=1}^N f''_i(x)]^{-3/2}
+\end{equation}
+Assuming that individual terms in above equation remain bounded, we can easily see that
+\begin{equation}
+\eta_0 \sim O(N^{-1/2})
+\end{equation}
+We therefore arrive at the following rule of thumb: {\em SNS becomes more efficient as the number of observations in a log-likelihood function increases}.
 
 \bibliography{SNS}
+
 \end{document}
 
 

@@ -10,6 +10,8 @@
 #   effective sample sizes for the time series in each col of 'x'
 ############################################################################# 
 ess <- function(x, method = c("coda", "ise")) {
+  method <- match.arg(method) # TODO: added per JSS suggestion; must be tested
+  
   # recursive call to each column of x
   if (NCOL(x) > 1) {
     return (apply(x, 2, ess, method))
@@ -23,7 +25,7 @@ ess <- function(x, method = c("coda", "ise")) {
   if (sd(x) == 0.0) return (0.0)
   
   # coda method
-  if (method[1] == "coda") return (effectiveSize(x))
+  if (method == "coda") return (effectiveSize(x))
   
   # ise method
   autocf <- acf(x, plot = FALSE, lag.max = length(x))$acf

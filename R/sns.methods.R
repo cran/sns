@@ -36,6 +36,176 @@ sns.check.part <- function(part, K) {
   return (identical(as.integer(sort(unlist(part))), 1:K))
 }
 
+# validating twice-differentiability and concavity of log-density
+sns.check.logdensity <- function(x, fghEval
+  #, numderiv = 0
+  , numderiv.method = c("Richardson", "complex"), numderiv.args = list()
+  , blocks = append(list(1:length(x)), as.list(1:length(x)))
+  , dx = rep(1.0, length(x))
+  , nevals = 100, negdef.tol = 1e-8
+  , ...) {
+  dx <- rep(dx, length(x)) # in case scalar dx is upplied by user
+  fgh.ini <- fghEval(x, ...)
+    
+  ret <- list(check.ld.struct = NA, numderiv = NA, check.length.g = NA, check.dim.h = NA
+              , x.mat = NA, fgh.ini = NA, fgh.num.ini = NA
+              #, fgh.list = NA, fgh.num.list = NA
+              , f.vec = NA, g.mat = NA, g.mat.num = NA, h.array = NA, h.array.num = NA
+              , t.evals = NA, t.num.eval = NA
+              , is.g.num.finite = NA, is.h.num.finite = NA
+              , is.g.finite = NA, is.h.finite = NA
+              , g.diff.max = NA, h.diff.max = NA
+              , is.negdef.num = NA, is.negdef = NA
+              )
+  attr(ret, "class") <- "sns.check.logdensity"
+  
+  # determine if analytical derivatives are provided
+  # numderiv = 0: g,h analytical
+  # numderiv = 1: g analytical
+  # numderiv = 2: no analytical
+  is.fgh.list <- is.list(fgh.ini)
+  if (is.fgh.list) {
+    fgh.list.names <- names(fgh.ini)
+    have.fgh <- c("f", "g", "h") %in% fgh.list.names
+    if (all(have.fgh)) { # no numerical differentiation needed
+      ret$check.ld.struct <- TRUE
+      ret$numderiv <- 0
+    } else if (all(have.fgh[1:2])) { # numerical gradient needed
+      ret$check.ld.struct <- TRUE
+      ret$numderiv <- 1
+    } else {
+      ret$check.ld.struct <- FALSE
+      return (ret)
+    }
+  } else { # need numerical gradient and Hessian
+    ret$check.ld.struct <- TRUE
+    ret$numderiv <- 2
+  }
+  
+  # fghEval with numerical differentiation
+  numderiv.method <- match.arg(numderiv.method)
+  if (ret$numderiv == 2) {
+    fghEval.num <- function(x, ...) {
+      f <- fghEval(x, ...)
+      g <- grad(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+      h <- hessian(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+      return (list(f = f, g = g, h = h))
+    }
+  } else {
+    fghEval.num <- function(x, ...) {
+      f <- fghEval(x, ...)$f
+      g <- grad(func = function(x, ...) fghEval(x, ...)$f, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+      h <- hessian(func = function(x, ...) fghEval(x, ...)$f, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+      return (list(f = f, g = g, h = h))
+    }
+  }
+  
+  fgh.num.ini <- fghEval.num(x, ...)
+  
+  #return (fgh.num.ini)
+  
+  # check dimensional consistency of gradient and Hessian
+  K <- length(x)
+  if (ret$numderiv == 0) {
+    ret$check.length.g <- length(fgh.ini$g) == K
+    ret$check.dim.h <- nrow(fgh.ini$h) == K && ncol(fgh.ini$h) == K
+  } else if (ret$numderiv == 1) {
+    ret$check.length.g <- length(fgh.ini$g) == K
+    ret$check.dim.h <- nrow(fgh.num.ini$h) == K && ncol(fgh.num.ini$h) == K
+  } else if (ret$numderiv == 2) {
+    ret$check.length.g <- length(fgh.num.ini$g) == K
+    ret$check.dim.h <- nrow(fgh.num.ini$h) == K && ncol(fgh.num.ini$h) == K
+  }
+  
+  ret$x.mat <- sapply(1:K, function(k) runif(nevals, min = x[k] - 0.5 * dx[k], max = x[k] + 0.5 * dx[k]))
+  ret$x.mat[1, ] <- x
+  
+  t <- proc.time()[3]
+  fgh.list <- lapply(1:nevals, function(n) fghEval(ret$x.mat[n, ], ...))
+  ret$t.evals <- proc.time()[3] - t
+  
+  t <- proc.time()[3]
+  fgh.num.list <- lapply(1:nevals, function(n) fghEval.num(ret$x.mat[n, ], ...))
+  ret$t.num.evals <- proc.time()[3] - t
+  
+  # twice-differentiability
+  f.vec <- sapply(fgh.num.list, function(u) u$f)
+  index.f.finite <- which(is.finite(f.vec))
+  n.f.finite <- length(index.f.finite)
+  ret$f.vec <- f.vec
+  
+  g.mat.num <- t(sapply(fgh.num.list, function(u) u$g))
+  ret$g.mat.num <- g.mat.num
+  ret$is.g.num.finite <- all(is.finite(g.mat.num[index.f.finite, ]))
+  
+  h.array.num <- array(t(sapply(fgh.num.list, function(u) u$h)), dim = c(nevals, K, K))
+  ret$h.array.num <- h.array.num
+  ret$is.h.num.finite <- all(is.finite(h.array.num[index.f.finite, , ]))
+  
+  # closeness of analytical and numerical results (we need better metrics of difference)
+  if (ret$numderiv < 2) {
+    g.mat <- t(sapply(fgh.list, function(u) u$g))
+    ret$g.mat <- g.mat
+    ret$is.g.finite <- all(is.finite(g.mat[index.f.finite, ]))
+    ret$g.diff.max <- max(sapply(1:n.f.finite, function(i)
+      sqrt(sum((g.mat[index.f.finite[i], ] - g.mat.num[index.f.finite[i], ])^2))/sqrt(sum(g.mat[index.f.finite[i], ]^2))))
+  }
+  if (ret$numderiv == 0) {
+    h.array <- array(t(sapply(fgh.list, function(u) u$h)), dim = c(nevals, K, K))
+    ret$h.array <- h.array
+    ret$is.h.finite <- all(is.finite(h.array[index.f.finite, , ]))
+    ret$h.diff.max <- max(sapply(1:n.f.finite, function(i)
+      norm(h.array[index.f.finite[i], , ] - h.array.num[index.f.finite[i], , ], type = "F")/norm(h.array[index.f.finite[i], , ], type = "F")))
+  }
+  
+  # concavity (negative definiteness)
+  sns.is.positive.definite <- function(A, tol = 1e-8) all(eigen(A)$values > tol)
+  
+  ret$is.negdef.num <- sapply(1:length(blocks), function(i) all(sapply(1:n.f.finite, function(u) {
+    h.tmp <- h.array.num[index.f.finite[u], , ]
+    sns.is.positive.definite(-h.tmp[blocks[[i]], blocks[[i]], drop = F], tol = negdef.tol)
+  })))
+  
+  if (ret$numderiv == 0) {
+    ret$is.negdef <- sapply(1:length(blocks), function(i) all(sapply(1:n.f.finite, function(u) {
+      h.tmp <- h.array[index.f.finite[u], , ]
+      sns.is.positive.definite(-h.tmp[blocks[[i]], blocks[[i]], drop = F], tol = negdef.tol)
+    })))
+  }
+  
+  return (ret)
+}
+
+print.sns.check.logdensity <- function(x, ...) {
+  sns.TF.to.YesNo <- function(x) ifelse(x, "Yes", "No")
+  if (!x$check.ld.struct) {
+    cat("log-density output list has invalid names\n")
+    return (invisible(NULL))
+  }
+  numderiv <- x$numderiv
+  #cat("log-density is valid\n")
+  cat("number of finite function evals:", length(which(is.finite(x$f.vec))), "(out of ", length(x$f.vec), ")\n")
+  cat("recommended numderiv value:", numderiv, "\n")
+  cat("is length of gradient vector correct?", sns.TF.to.YesNo(x$check.length.g), "\n")
+  cat("are dims of Hessian matrix correct?", sns.TF.to.YesNo(x$check.dim.h), "\n")
+  cat("is numerical gradient finite?", sns.TF.to.YesNo(x$is.g.num.finite), "\n")
+  cat("is numerical Hessian finite?", sns.TF.to.YesNo(x$is.h.num.finite), "\n")
+  if (numderiv < 2) {
+    cat("is analytical gradient finite?", sns.TF.to.YesNo(x$is.g.finite), "\n")
+    cat("maximum relative diff in gradient:", x$g.diff.max, "\n")
+  }
+  if (numderiv == 0) {
+    cat("is analytical Hessian finite?", sns.TF.to.YesNo(x$is.h.finite), "\n")
+    cat("maximum relative diff in Hessian:", x$h.diff.max, "\n")
+  }
+  cat("is numeric Hessian (block) negative-definite?", sns.TF.to.YesNo(x$is.negdef.num), "\n")
+  if (numderiv == 0) {
+    cat("is analytical Hessian (block) negative-definite?", sns.TF.to.YesNo(x$is.negdef), "\n")
+  }
+  
+  return (invisible(NULL))
+}
+
 # predict methods
 predict.sns <- function(object, fpred
   , nburnin = max(nrow(object)/2, attr(object, "nnr"))
@@ -228,4 +398,30 @@ sns.calc.pval <- function(x, ref=0.0, na.rm = FALSE) { # add flag for one-sided 
   attr(ret, "bigger") <- bigger
   return (ret)
 }
+
+# convenience function for numerical augmentation of a log-density
+sns.fghEval.numaug <- function(fghEval, numderiv = 0
+  , numderiv.method = c("Richardson", "simple"), numderiv.args = list()) {
+  numderiv <- as.integer(numderiv)
+  if (numderiv > 0) {
+    numderiv.method <- match.arg(numderiv.method)
+    if (numderiv == 1) { # we need numeric hessian
+      fghEval.int <- function(x, ...) {
+        fg <- fghEval(x, ...)
+        h <- hessian(func = function(x, ...) fghEval(x, ...)$f, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        return (list(f = fg$f, g = fg$g, h = h))
+      }
+    } else { # we need numeric gradient and hessian
+      fghEval.int <- function(x, ...) {
+        f <- fghEval(x, ...)
+        g <- grad(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        h <- hessian(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        return (list(f = f, g = g, h = h))
+      }
+    }
+  } else {
+    fghEval.int <- fghEval
+  }
+}
+
 

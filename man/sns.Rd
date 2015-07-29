@@ -1,101 +1,127 @@
 \name{sns}
 \alias{sns}
-\alias{sns.run}
-\alias{print.sns}
+%- Also NEED an '\alias' for EACH other topic documented here.
 
 \title{Stochastic Newton Sampler (SNS)}
 
 \description{
-SNS is a Metropolis-Hastings MCMC sampler with a multivariate Gaussian proposal function resulting from a local, second-order Taylor series expansion of log-density. The mean of the Gaussian proposal is identical to the full Newton-Raphson step from the current point. During burn-in, Newton-Raphson optimization can be performed to get close to the mode of the pdf which is unique due to convexity, resulting in faster convergence. For high dimensional densities, state space partitioning can be used to improve mixing.
+SNS is a Metropolis-Hastings MCMC sampler with a multivariate Gaussian proposal function resulting from a local, second-order Taylor series expansion of log-density. The mean of the Gaussian proposal is identical to the full Newton-Raphson step from the current point. During burn-in, Newton-Raphson optimization can be performed to get close to the mode of the pdf which is unique due to convexity, resulting in faster convergence. For high dimensional densities, state space partitioning can be used to improve mixing. Support for numerical differentiation is provided using \pkg{numDeriv} package. \code{sns} is the low-level function for drawing one sample from the distribution. For drawing multiple samples from a (fixed) distribution, consider using \code{sns.run}.
 }
-
 \usage{
-sns(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, ...)
-sns.run(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
-  , mh.diag = FALSE, part = NULL
-  , print.level = 0, report.progress = ceiling(niter/10), ...)
-\method{print}{sns}(x, ...)
+sns(x, fghEval, rnd = TRUE, gfit = NULL, mh.diag = FALSE
+  , part = NULL, numderiv = 0
+  , numderiv.method = c("Richardson", "simple")
+  , numderiv.args = list(), ...)
 }
-
+%- maybe also 'usage' for other objects documented here.
 \arguments{
-    \item{x}{For \code{sns}, the current state vector. For \code{print.sns}, an object of class \code{sns}.}
-    \item{fghEval}{function, should evaluate the log-density, its gradient and Hessian at any point. Must a return a list with labels: f - the log-probability density, g - gradient vector, h - Hessian matrix.}
-    \item{rnd}{Runs 1 iteration of Newton-Raphson optimization method (non-stochastic or 'nr' mode) when \code{FALSE}. Runs Metropolis-Hastings (stochastic or 'mcmc' mode) for drawing a sample when \code{TRUE}.}
-    \item{gfit}{Gaussian fit at point \code{init}. If \code{NULL} then \code{sns} will compute a Gaussian fit at \code{x}.}
-    \item{mh.diag}{Boolean flag, indicating whether detailed MH diagnostics such as components of acceptance test must be returned or not.}
-    \item{part}{List describing partitioning of state space into subsets. Each element of the list must be an integer vector containing a set of indexes (between \code{1} and \code{length(x)} or \code{length(init)}) indicating which subset of all dimensions to jointly sample. These integer vectors must be mutually exclusive and collectively exhaustive, i.e. cover the entire state space and have no duplicates, in order for the partitioning to represent a valid Gibbs sampling approach.}
-    \item{init}{Starting state for \code{sns.run}.}
-    \item{niter}{Number of iterations to perform (in 'nr' and 'mcmc' mode).}
-    \item{nnr}{Number of Newton-Raphson (non-stochastic) iterations to perform at the beginning.}
-    \item{print.level}{If greater than 0, print sampling progress report.}
-    \item{report.progress}{Number of sampling iterations to wait before printing progress reports.}
-    \item{...}{Arguments passed to \code{fghEval} in the case of \code{sns} and \code{sns.run}.}
+  \item{x}{Current state vector.}
+  \item{fghEval}{Log-density to be sampled from. A valid log-density can have one of 3 forms: 1) return log-density, but no gradient or Hessian, 2) return a list of \code{f} and \code{g} for log-density and its gradient vector, respectively, 3) return a list of \code{f}, \code{g}, and \code{h} for log-density, gradient vector, and Hessian matrix. Missing derivatives are computed numerically.}
+  \item{rnd}{Runs 1 iteration of Newton-Raphson optimization method (non-stochastic or 'nr' mode) when \code{FALSE}. Runs Metropolis-Hastings (stochastic or 'mcmc' mode) for drawing a sample when \code{TRUE}.}
+  \item{gfit}{Gaussian fit at point \code{init}. If \code{NULL} then \code{sns} will compute a Gaussian fit at \code{x}.}
+  \item{mh.diag}{Boolean flag, indicating whether detailed MH diagnostics such as components of acceptance test must be returned or not.}
+  \item{part}{List describing partitioning of state space into subsets. Each element of the list must be an integer vector containing a set of indexes (between \code{1} and \code{length(x)} or \code{length(init)}) indicating which subset of all dimensions to jointly sample. These integer vectors must be mutually exclusive and collectively exhaustive, i.e. cover the entire state space and have no duplicates, in order for the partitioning to represent a valid Gibbs sampling approach. See \code{sns.make.part} and \code{sns.check.part}.}
+  \item{numderiv}{Integer with value from the set \code{0,1,2}. If \code{0}, no numerical differentiation is performed, and thus \code{fghEval} is expected to supply \code{f}, \code{g} and \code{h}. If \code{1}, we expect \code{fghEval} to provide \code{f} amd \code{g}, and Hessian will be calculated numerically. If \code{2}, \code{fghEval} only returns log-density, and numerical differentiation is needed to calculate gradient and Hessian.}
+  \item{numderiv.method}{Method used for numeric differentiation. This is passed to the \code{grad} and \code{hessian} functions in \pkg{numDeriv} package. See the package documentation for details.}
+  \item{numderiv.args}{Arguments to the numeric differentiation method chosen in \code{numderiv.method}, passed to \code{grad} and \code{hessian} functions in \pkg{numDeriv}. See package documentation for details.}
+  \item{\dots}{Other arguments to be passed to \code{fghEval}.}
+}
+%\details{
+%%  ~~ If necessary, more details than the description above ~~
+%}
+\value{
+\code{sns} returns the sample drawn as a vector, with attributes:
+  \item{accept}{A boolean indicating whether the proposed point was accepted.}
+  \item{ll}{Value of the log-density at the sampled point.}
+  \item{gfit}{List containing Gaussian fit to pdf at the sampled point.}
 }
 
-\value{
-   \code{sns.run} returns an object of class \code{sns} with elements:
-   \item{samplesMat}{A matrix object with \code{nsample} rows and \code{K} cols.}
-   \item{acceptance}{Metropolis proposal percentage acceptance.}
-   \item{burn.iters}{Number of burn-in ierations.}
-   \item{sample.time}{Time in seconds spent in sampling.}
-   \item{burnin.time}{Time in seconds spent in burn-in.}
+\references{
+Hastings, W. K. (1970). Monte Carlo sampling methods using Markov chains and their applications. Biometrika, 57(1), 97-109.
 
-   \code{sns} returns the sample drawn as a vector, with attributes:
-   \item{accept}{A boolean indicating whether the proposal was accepted.}
-   \item{ll}{Value of the log-pdf at the sampled point.}
-   \item{gfit}{List containing Gaussian fit to pdf at the sampled point.}
+Qi, Y., & Minka, T. P. (2002). Hessian-based markov chain monte-carlo algorithms. 1st Cape Cod Workshop on Monte Carlo Methods.
+}
+
+\author{
+Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }
 
 \note{
-1. \code{sns.run} should be the function called by users when drawing multiple samples from the same density, while \code{sns} is a lower level function which can be directly called if required, for example when the sampled density is a conditional density and part of Gibbs sampling cycle, in which the conditional density is changing from one iteration to the next.
+1. Since SNS makes local Gaussian approximations to the density with the covariance matrix of the Gaussian proposal being the log-density Hessian, there is a strict requirement for the log-density to be concave.  
 
-2. Proving log-concavity for arbitrary probability distributions is non-trvial. However distributions \emph{generated} by replacing parameters of a concave distribution with linear expressions are known to be log-concave. \emph{Mahani and Sharabiani (2013)} show how to automatically generate Hessian and gradient for the expanded parameter set distribution given those of the base distribution. The GLM expansion framework is available in the R package RegressionFactory.
+2. Proving log-concavity for arbitrary probability distributions is non-trvial. However, distributions \emph{generated} by replacing parameters of a concave distribution with linear expressions are known to be log-concave. This negative-definiteness invariance as well as expressions for full gradient and Hessian in terms of derivatives of low-dimensional base distributions are discussed in the vignette. The GLM expansion framework is available in the R package \pkg{RegressionFactory}.
+
+3. See package vignette for more details on SNS theory, software, examples, and performance.
  
-3. Since SNS makes local Gaussian approximations to the density with the covariance being the Hessian, there is a strict requirement for the pdf to be log-concave.  
 }
+
+%% ~Make other sections like Warning with \section{Warning }{....} ~
 
 \seealso{
-\code{\link{ess}}, \code{\link{summary.sns}}, \code{\link{plot.sns}}, \code{\link{predict.sns}}
-}
-
-\author{Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani}
-\keyword{sampling, multivariate, mcmc, Metropolis}
-
-\references{
- Mahani, Alireza S. and Sharabiani, Mansour T.A. (2013)
- \emph{Metropolis-Hastings Sampling Using Multivariate Gaussian Tangents}
- \url{http://arxiv.org/pdf/1308.0657v1.pdf} 
- 
- Qi, Y. and Minka, T.P. (2002)
- \emph{Hessian-Based Markov Chain Monte Carlo Algorithms}
+\code{\link{sns.run}}, \code{\link{sns.fghEval.numaug}}
 }
 
 \examples{
 \dontrun{
 
-# use this library for constructing the
-# log-likelihood and its gradient and Hessian
+# using RegressionFactory for generating log-likelihood and its derivatives
 library(RegressionFactory)
 
-# simulate data for logistic regression
-N <- 1000 # number of observations
-K <- 5 # number of attributes
-X <- matrix(runif(N*K, min = -0.5, max = +0.5), ncol = K)
-beta <- runif(K, min = -0.5, max = +0.5)
-y <- 1*(runif(N) < 1/(1 + exp(- X \%*\% beta)))
-
-# define log-likelihood using expander framework of
-# RegressionFactory package
-loglike <- function(beta, X, y) {
-  regfac.expand.1par(beta, X, y, fbase1.binomial.logit, fgh = 2, n = 1)
+loglike.poisson <- function(beta, X, y) {
+  regfac.expand.1par(beta, X = X, y = y,
+                     fbase1 = fbase1.poisson.log)
 }
 
-# SNS sampling
-nsmp <- 100
+# simulating data
+K <- 5
+N <- 1000
+X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
+beta <- runif(K, -0.5, +0.5)
+y <- rpois(N, exp(X \%*\% beta))
+
 beta.init <- rep(0.0, K)
-sns.out <- sns.run(beta.init, loglike, 200, X = X, y = y)
-summary(sns.out)
+
+# glm estimate, for reference
+beta.glm <- glm(y ~ X - 1, family = "poisson",
+                start = beta.init)$coefficients
+
+# running SNS in non-stochastic mode
+# this should produce results very close to glm
+beta.sns <- beta.init
+for (i in 1:20)
+  beta.sns <- sns(beta.sns, loglike.poisson, X = X, y = y, rnd = F)
+
+# comparison
+all.equal(as.numeric(beta.glm), as.numeric(beta.sns))
+
+# trying numerical differentiation
+loglike.poisson.fonly <- function(beta, X, y) {
+  regfac.expand.1par(beta, X = X, y = y, fgh = 0,
+                     fbase1 = fbase1.poisson.log)
+}
+
+beta.sns.numderiv <- beta.init
+for (i in 1:20)
+  beta.sns.numderiv <- sns(beta.sns.numderiv, loglike.poisson.fonly
+                  , X = X, y = y, rnd = F, numderiv = 2)
+all.equal(as.numeric(beta.glm), as.numeric(beta.sns.numderiv))
+
+# add numerical derivatives to fghEval outside sns
+loglike.poisson.numaug <- sns.fghEval.numaug(loglike.poisson.fonly
+  , numderiv = 2)
+
+beta.sns.numaug <- beta.init
+for (i in 1:20)
+  # set numderiv to 0 to avoid repeating 
+  # numerical augmentation inside sns
+  beta.sns.numaug <- sns(beta.sns.numaug, loglike.poisson.numaug
+                           , X = X, y = y, rnd = F, numderiv = 0)
+all.equal(as.numeric(beta.glm), as.numeric(beta.sns.numaug))
 
 }
 }
 
+% Add one or more standard keywords, see file 'KEYWORDS' in the
+% R documentation directory.
+\keyword{sampling, multivariate, mcmc, Metropolis}
+% \keyword{ ~kwd2 }% __ONLY ONE__ keyword per line

@@ -1,4 +1,6 @@
-sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, ...)
+sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL
+  , numderiv = 0, numderiv.method = c("Richardson", "simple"), numderiv.args = list()
+  , ...)
 { 
 
   fitGaussian <- function(x, f, ...) 
@@ -14,10 +16,31 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
                g=ret$g))           # gradient 
   }
   
+  numderiv <- as.integer(numderiv)
+  if (numderiv > 0) {
+    numderiv.method <- match.arg(numderiv.method)
+    if (numderiv == 1) { # we need numeric hessian
+      fghEval.int <- function(x, ...) {
+        fg <- fghEval(x, ...)
+        h <- hessian(func = function(x, ...) fghEval(x, ...)$f, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        return (list(f = fg$f, g = fg$g, h = h))
+      }
+    } else { # we need numeric gradient and hessian
+      fghEval.int <- function(x, ...) {
+        f <- fghEval(x, ...)
+        g <- grad(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        h <- hessian(func = fghEval, x = x, ..., method = numderiv.method, method.args = numderiv.args)
+        return (list(f = f, g = g, h = h))
+      }
+    }
+  } else {
+    fghEval.int <- fghEval
+  }
+  
   if (!is.null(part)) { # code for 'state space partitioning', recursive call
     fghEval.part <- function(xsub, xfull, subset, ...) {
       xfull[subset] <- xsub
-      ret <- fghEval(xfull, ...)
+      ret <- fghEval.int(xfull, ...)
       return (list(f = ret$f, g = ret$g[subset], h = ret$h[subset, subset]))
     }
     npart <- length(part)
@@ -35,14 +58,14 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
     }
     attr(x, "lp") <- attr(rettmp, "lp")
     attr(x, "accept") <- accept
-    attr(x, "gfit") <- fitGaussian(x, fghEval, ...)
+    attr(x, "gfit") <- fitGaussian(x, fghEval.int, ...)
     if (mh.diag) attr(x, "mh.diag") <- mh.diag
     return (x)
   }
 
   # rnd: if FALSE, perform Newton's optimization (non-stochastic)
   # Fit Gaussian at x
-  if (is.null(gfit)) gfit <- fitGaussian(x = x, f = fghEval, ...)
+  if (is.null(gfit)) gfit <- fitGaussian(x = x, f = fghEval.int, ...)
   mu     <- gfit$mu 
   Sigma  <- gfit$Sigma   # Covariance
   iSigma <- gfit$iSigma  # Inverse covariance
@@ -61,13 +84,13 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
         
     fk <- gfit$f; # Values at the current point
     gk <- gfit$g; 
-    fk1 <- fghEval(search_x, ...)$f; # Function value at searching point
+    fk1 <- fghEval.int(search_x, ...)$f; # Function value at searching point
     ls_iter <- 1;
     # Linesearch by backtracking from full Newton step
     while (fk1 < fk + c*alphak*(t(gk)%*%d) && ls_iter < 20) { 
       alphak <- alphak*rho; # if so, then go half way
       search_x <- x + alphak*d;
-      fk1 <- fghEval(search_x, ...)$f;
+      fk1 <- fghEval.int(search_x, ...)$f;
       ls_iter <- ls_iter + 1;
     }
     x.prop <- as.vector(search_x);
@@ -76,7 +99,7 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
   log.q.prop <- dmvnorm(as.vector(x.prop), mu, Sigma, log=TRUE)
   
   # fit Gaussian at x.prop
-  gfit.prop <- fitGaussian(x=x.prop,f=fghEval,...)
+  gfit.prop <- fitGaussian(x=x.prop,f=fghEval.int,...)
   mu.prop <- gfit.prop$mu
   Sigma.prop <- gfit.prop$Sigma
   iSigma.prop <- gfit.prop$iSigma
@@ -92,7 +115,7 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
     
   # perform acceptance test
   if (!rnd || ratio==1 || runif(1)<ratio) {
-	 gfit <- gfit.prop
+   gfit <- gfit.prop
 	 x <- x.prop;
 	 attr(x,"accept") <- TRUE
 	 attr(x,"lp") <- log.p.prop
@@ -113,8 +136,12 @@ sns <- function(x, fghEval, rnd=TRUE, gfit=NULL, mh.diag = FALSE, part = NULL, .
 
 sns.run <- function(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
   , mh.diag = FALSE, part = NULL, print.level = 0
-  , report.progress = ceiling(niter/10), ...)
+  , report.progress = ceiling(niter/10)
+  , numderiv = 0, numderiv.method = c("Richardson", "simple"), numderiv.args = list()
+  , ...)
 {
+  fghEval.int <- sns.fghEval.numaug(fghEval, numderiv, numderiv.method, numderiv.args)
+
   # checking arguments
   stopifnot(niter >= 1)
   if (report.progress <= 0) {
@@ -138,7 +165,9 @@ sns.run <- function(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
 
   # performing nr/mcmc iterations
   for (i in 1:niter) {
-      x <- sns(x, fghEval, rnd = i > nnr, gfit = attr(x, "gfit"), mh.diag = mh.diag, part = part, ...)
+      x <- sns(x, fghEval.int, rnd = i > nnr, gfit = attr(x, "gfit"), mh.diag = mh.diag, part = part
+               , numderiv = 0#, numderiv.method = numderiv.method, numderiv.args = numderiv.args
+               , ...)
       accept[i, ] <- attr(x, "accept")
       lp[i] <- attr(x, "lp")
       chain[i, ] <- x
@@ -159,7 +188,7 @@ sns.run <- function(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
 
   # assembling output
   attr(chain, "init") <- init
-  attr(chain, "lp.init") <- fghEval(init, ...)$f
+  attr(chain, "lp.init") <- fghEval.int(init, ...)$f
   attr(chain, "accept") <- accept
   attr(chain, "lp") <- lp
   attr(chain, "nnr") <- nnr
@@ -171,5 +200,4 @@ sns.run <- function(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
   class(chain) <- "sns"
   return (chain)
 }
-
 

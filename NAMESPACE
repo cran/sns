@@ -1,12 +1,18 @@
-importFrom(mvtnorm, rmvnorm, dmvnorm)
-importFrom(coda, effectiveSize)
-
+importFrom("mvtnorm", "rmvnorm", "dmvnorm")
+importFrom("coda", "effectiveSize")
+importFrom("numDeriv", "grad")
+importFrom("numDeriv", "hessian")
+importFrom("graphics", "abline", "hist", "plot")
+importFrom("stats", "acf", "median", "printCoefmat", "quantile",
+             "runif", "sd")
 export("ess")
 
 export("sns")
 export("sns.run")
 export("sns.make.part")
 export("sns.check.part")
+export("sns.check.logdensity")
+export("sns.fghEval.numaug")
 
 # sns methods
 S3method("print", "sns")
@@ -16,4 +22,5 @@ S3method("plot", "sns")
 S3method("predict", "sns")
 S3method("summary", "predict.sns")
 S3method("print", "summary.predict.sns")
+S3method("print", "sns.check.logdensity")
 

@@ -30,5 +30,5 @@ Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }
 
 \seealso{
-\code{\link{sns}}, \code{\link{sns.run}}
+\code{\link{sns.run}}
 }

@@ -41,6 +41,52 @@ Method for sample-based prediction using the output of \code{\link{sns.run}}.
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }
 
-\seealso{
-\code{\link{sns}}, \code{\link{sns.run}}
+\note{
+See package vignette for more details on SNS theory, software, examples, and performance.
 }
+
+\seealso{
+\code{\link{sns.run}}
+}
+
+\examples{
+
+\dontrun{
+
+# using RegressionFactory for generating log-likelihood and derivatives
+library("RegressionFactory")
+
+loglike.poisson <- function(beta, X, y) {
+  regfac.expand.1par(beta, X = X, y = y,
+    fbase1 = fbase1.poisson.log)
+}
+
+# simulating data
+K <- 5
+N <- 1000
+X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
+beta <- runif(K, -0.5, +0.5)
+y <- rpois(N, exp(X \%*\% beta))
+
+beta.init <- rep(0.0, K)
+beta.smp <- sns.run(beta.init, loglike.poisson,
+  niter = 1000, nnr = 20, mh.diag = TRUE, X = X, y = y)
+
+# prediction function for mean response
+predmean.poisson <- function(beta, Xnew) exp(Xnew \%*\% beta)
+ymean.new <- predict(beta.smp, predmean.poisson,
+                     nburnin = 100, Xnew = X)
+summary(ymean.new)
+
+# (stochastic) prediction function for response
+predsmp.poisson <- function(beta, Xnew)
+  rpois(nrow(Xnew), exp(Xnew \%*\% beta))
+ysmp.new <- predict(beta.smp, predsmp.poisson
+                    , nburnin = 100, Xnew = X)
+summary(ysmp.new)
+
+}
+
+}
+
+

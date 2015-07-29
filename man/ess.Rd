@@ -4,9 +4,7 @@
 \title{Effective Sample Size Calculator}
 
 \description{
-Computes the effective sample size of MCMC chains.
-
-using the algorithm in Section 2.3 of the paper by Madeline Thompson. The algorithm is taken from earlier work on `Initial Sequence Estimators' by multiple authors.
+Computes the effective sample size of MCMC chains, using the algorithm in Section 2.3 of the paper by Madeline Thompson. The algorithm is taken from earlier work on `Initial Sequence Estimators' by multiple authors.
 }
 
 \usage{
@@ -14,7 +12,7 @@ ess(x, method = c("coda", "ise"))
 }
 
 \arguments{
-    \item{x}{Matrix object with each sample (possibly multivariate) as a row.}
+    \item{x}{Matrix object with each sample (possibly multivariate) as a row. Effective sample size calculation is done independently for each column of \code{x}.}
     \item{method}{Method of calculating effective size. Current options are "coda" which calls \code{effectiveSize} function in \code{coda} package, and "ise" which uses the 'Initial Sequence Estimators' method described in Section 2.3 of Thompson (2010).}
 }
 

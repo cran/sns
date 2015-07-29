@@ -1,3 +1,13 @@
+Changes in 1.1.0
+  * Added support for numerical differentiation, using numDeriv package.
+  * Added log-density validation function, sns.check.logdensity.
+  * Major revision of vignette.
+  * Edited help files, including splitting of sns and sns.run.
+
+Changes in 1.0.1
+  * Added match.arg to handle "method" argument in "ess" function.
+  * Revised vignette.
+
 Changes in 1.0.0
   * Added state space partitioning to sns(), using recursion.
   * Refined sns.run() interface.

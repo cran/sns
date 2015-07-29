@@ -44,7 +44,7 @@ Methods for summarizing the output of \code{\link{sns.run}}, and for printing th
   \item{reldev.mean}{Mean relative deviation from quadratic approximation, defined as difference between actual log-density change and the value predicted from quadratic fit at density maximum, divided by the actual change. The location of density maximum is assumed to be the value at the end of the last NR iteration. Therefore, for this measure to be accurate, users must ensure \code{nnr} is sufficiently large to allow for convegrence of the optimization phase.}
   \item{pval.ref}{Same as input.}
   \item{ess.method}{Same as input.}
-  \item{smp}{A list with elements \code{mean}, \code{sd}, \code{ess}, \code{quantiles}, \code{pval} representing sample-based mean, standard deviation, effective size, and quantiles, based on specified range and using thinning (if specified).}
+  \item{smp}{A list with elements \code{mean}, \code{sd}, \code{ess}, \code{quantiles}, \code{pval} representing sample-based mean, standard deviation, effective size, quantiles and sample-based p-values, based on specified range and using thinning (if specified).}
 }
 
 \author{
@@ -52,5 +52,5 @@ Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }
 
 \seealso{
-\code{\link{sns}}, \code{\link{sns.run}}
+\code{\link{sns.run}}
 }
