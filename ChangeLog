@@ -1,3 +1,6 @@
+Changes in 1.1.1
+  * Changed maintainer email address.
+
 Changes in 1.1.0
   * Added support for numerical differentiation, using numDeriv package.
   * Added log-density validation function, sns.check.logdensity.
