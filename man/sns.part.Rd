@@ -24,6 +24,10 @@ sns.check.part(part, K)
 \code{sns.make.part} produces a list of integer vectors, each containing coordinates belonging to the same subset. \code{sns.check.part} produces a boolean flag, indicating whether or not the partition list is valid or not. The subset members must constitute a mutually-exclusive, collectively-exhaustive set relative to \code{1:K}.
 }
 
+\references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+}
+
 \author{
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }

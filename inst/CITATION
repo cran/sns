@@ -1,0 +1,26 @@
+bibentry(bibtype = "Article",
+  title        = "Stochastic Newton Sampler: The {R} Package {sns}",
+  author       = c(person(given = c("Alireza", "S."),
+                          family = "Mahani",
+                          email = "alireza.mahani@sentrana.com"),
+                   person(given = "Asad",
+                          family = "Hasan"),
+                   person(given = "Marshall",
+                          family = "Jiang"),
+                   person(given = c("Mansour", "T.", "A."),
+                          family = "Sharabiani")),
+  journal      = "Journal of Statistical Software, Code Snippets",
+  year         = "2016",
+  volume       = "74",
+  number       = "2",
+  pages        = "1--33",
+  doi          = "10.18637/jss.v074.c02",
+
+  header       = "To cite sns in publications use:",
+  textVersion  =
+  paste("Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T. A. Sharabiani (2016).",
+        "Stochastic Newton Sampler: The R Package sns.",
+        "Journal of Statistical Software, Code Snippets, 74(2), 1-33.",
+        "doi:10.18637/jss.v074.c02")
+)
+

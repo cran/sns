@@ -28,9 +28,9 @@ sns.fghEval.numaug(fghEval, numderiv = 0
 A function, accepting same arguments as \code{fghEval}, but guaranteed to return the original log-density, plus gradient and Hessian (both of which could possibly by numerically calculated). If \code{numderiv=0}, \code{fghEval} is returned without change. The function will return log-density, gradient and Hessian as elements \code{f}, \code{g} and \code{h} of a list.
 }
 
-%\references{
-%% ~put references to the literature/web site here ~
-%}
+\references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+}
 
 \author{
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani

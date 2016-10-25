@@ -47,6 +47,10 @@ Methods for summarizing the output of \code{\link{sns.run}}, and for printing th
   \item{smp}{A list with elements \code{mean}, \code{sd}, \code{ess}, \code{quantiles}, \code{pval} representing sample-based mean, standard deviation, effective size, quantiles and sample-based p-values, based on specified range and using thinning (if specified).}
 }
 
+\references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+}
+
 \author{
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }

@@ -25,6 +25,10 @@ Method for visualizing the output of \code{\link{sns.run}}.
 \code{plot.sns} produces the following types of plots: 1) log-probability trace plot (vertical line, if present, indicates transition from nr to mcmc mode), 2) trace plot of state variables (one per coordinate; vertical line has same meaning as 1), 3) effective sample size by coordinate (horizontal line indicates maximum effective size possible, equal to number of samples after discarding nburnin initial iterations), 4) post-burnin state vector histograms (one per coordinate, vertical line indicates post-burnin average, 5) autocorrelation plots, one per coordinate.
 }
 
+\references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+}
+
 \author{
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 }

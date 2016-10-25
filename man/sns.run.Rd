@@ -44,9 +44,9 @@ sns.run(init, fghEval, niter = 100, nnr = min(10, round(niter/4))
    \item{burnin.time}{Time in seconds spent in burn-in.}
 }
 
-%\references{
-%% ~put references to the literature/web site here ~
-%}
+\references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+}
 
 \author{
 Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani

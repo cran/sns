@@ -37,9 +37,12 @@ sns(x, fghEval, rnd = TRUE, gfit = NULL, mh.diag = FALSE
 }
 
 \references{
+Mahani A.S., Hasan A., Jiang M. &  Sharabiani M.T.A. (2016). Stochastic Newton Sampler: The R Package sns. Journal of Statistical Software, Code Snippets, 74(2), 1-33. doi:10.18637/jss.v074.c02
+
 Hastings, W. K. (1970). Monte Carlo sampling methods using Markov chains and their applications. Biometrika, 57(1), 97-109.
 
 Qi, Y., & Minka, T. P. (2002). Hessian-based markov chain monte-carlo algorithms. 1st Cape Cod Workshop on Monte Carlo Methods.
+
 }
 
 \author{
