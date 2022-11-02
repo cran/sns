@@ -12,6 +12,8 @@
 \usepackage{amsthm}
 \usepackage{subfig}
 
+% \VignetteDepends{RegressionFactory, MfUSampler}
+
 %\VignetteIndexEntry{Stochastic Newton Sampler: The R Package sns}
 %\VignetteKeyword{negative definiteness, regression, optimization, sampling}
 
@@ -349,8 +351,16 @@ In real-world applications, the Gaussian proposal function is only an approximat
 Generalized Linear Models (GLMs)~\citep{nelder1972generalized} are an important family of statistical models with applications such as risk analysis~\citep{sobehart2000moody}, public health~\citep{azar2011immunologic} and political science~\citep{gelman2007data}. GLMs can be extended to incorporate data sparseness and heterogeneity via the Hierarchical Bayesian framework~\citep{peter2005bayesian} or to account for repeated measurements and longitudinal data via Generalized Linear Mixed Model~\citep{mcculloch2006generalized}. With properly-chosen link functions, many GLMs are known - or can be easily proven - to have globally-concave log-densities with negative-definite Hessian matrices~\citep{gilks1992adaptive}. As such, GLMs are excellent candidates for SNS. Embedded in Bayesian frameworks, they continue to enjoy log-concavity assuming the same property holds for prior terms, according to the Bayes' rule and the invariance of concavity under function addition.
 
 In our second example, we illustrate how to apply \pkg{sns} to the log-likelihood of Poisson regression. As before, we start with constructing the log-density and its gradient and Hessian, this time using the expander framework of \pkg{RegressionFactory} package\citep{regfacpackage}:
-<<>>=
-library("RegressionFactory")
+<<echo=FALSE>>=
+have_regression_factory <- require("RegressionFactory")
+if (have_regression_factory) {
+  loglike.poisson <- function(beta, X, y) {
+    regfac.expand.1par(beta, X = X, y = y,
+      fbase1 = fbase1.poisson.log)
+  }
+}
+@
+<<eval=FALSE>>=
 loglike.poisson <- function(beta, X, y) {
   regfac.expand.1par(beta, X = X, y = y,
     fbase1 = fbase1.poisson.log)
@@ -372,19 +382,40 @@ beta.glm <- glm(y ~ X - 1, family = "poisson",
   start = beta.init)$coefficients
 @
 As mentioned before, \pkg{sns} can be run in non-stochastic mode, which is equivalent to Newton-Raphson optimization with line search. Results should be identical, or very close, to \code{glm} results:
-<<>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  beta.sns <- sns.run(beta.init, fghEval = loglike.poisson,
+    niter = 20, nnr = 20, X = X, y = y)
+  beta.nr <- beta.sns[20, ]
+  cbind(beta.glm, beta.nr)
+}
+@
+<<eval=FALSE>>=
 beta.sns <- sns.run(beta.init, fghEval = loglike.poisson,
   niter = 20, nnr = 20, X = X, y = y)
 beta.nr <- beta.sns[20, ]
 cbind(beta.glm, beta.nr)
 @
 The primary use-case for \pkg{sns} is not ML estimation, but rather MCMC sampling of the distribution. To do this, we perform the first few iterations in non-stochastic mode (20 iterations here), and then switch to stochastic mode for the remaining 180 iterations:
-<<>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  beta.smp <- sns.run(beta.init, loglike.poisson
+    , niter = 200, nnr = 20, mh.diag = TRUE, X = X, y = y)
+}
+@
+<<eval=FALSE>>=
 beta.smp <- sns.run(beta.init, loglike.poisson
   , niter = 200, nnr = 20, mh.diag = TRUE, X = X, y = y)
 @
 Examining the log-density trace plot (Figure~\ref{fig-poisson-lp}) shows an expected pattern: During non-stochastic phase (left of vertical line) log-probability rises steadily while approaching the peak. During MCMC sampling, on the other hand, PDF maximum forms an upper bound for the MCMC movements, and the chain occasionally visits low-probability areas. The plot is created using the following line:
-<<label=lp_plot,include=FALSE,echo=TRUE>>=
+<<label=lp_plot,include=FALSE,echo=FALSE>>=
+if (have_regression_factory) {
+  plot(beta.smp, select = 1)
+} else {
+  plot(1:10)
+}
+@
+<<eval=FALSE>>=
 plot(beta.smp, select = 1)
 @
 \begin{figure}
@@ -395,40 +426,76 @@ plot(beta.smp, select = 1)
 \label{fig-poisson-lp}
 \end{figure}
 The \code{plot.sns} function offers 4 other types of plots, besides the log-density trace plot. See package documentation for details. Further diagnostic information can be accessed via the \code{summary.sns} function:
-<<>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  summary(beta.smp)
+}
+@
+<<eval=FALSE>>=
 summary(beta.smp)
 @
 The \code{summary.sns} function discards the first half of the samples as burn-in by default, before calculating sample statistics and acceptance. This behavior can be controlled via the argument \code{nburnin}. Arguments \code{end} and \code{thin} have behavior similar to their counterparts in the \code{as.mcmc} function of \pkg{coda} package. We observe two numbers in the summary print-out: Firstly, acceptance rate is less than 100\%, contrary to the case with a multivariate Gaussian PDF (example 1). Secondly, the mean relative deviation from quadratic approximation (\code{reldev.mean}) is now non-zero, again reflecting non-Gaussianity of the poisson likelihood PDF. The number (<1\%) is still small, however, leading to high acceptance rate and good mixing of the chain.
 
 Next, we want to predict the response variable in Poisson regression model, given new values of the explanatory variables. We distinguish between two types of prediction: 1) predicting mean response, 2) generating samples from posterior predictive distribution. We illustrate how to do both using the \code{predict.sns} function. We begin by implementing the mean prediction function, which simply applies the inverse link function (exponential here) to the linear predictor. (For better comparison between the two prediction modes, we increase number of samples to 1000.)
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  beta.smp <- sns.run(beta.init, loglike.poisson,
+    niter = 1000, nnr = 20, mh.diag = TRUE, X = X, y = y)
+  predmean.poisson <- function(beta, Xnew) exp(Xnew %*% beta)
+}
+@
+<<eval=FALSE>>=
 beta.smp <- sns.run(beta.init, loglike.poisson,
   niter = 1000, nnr = 20, mh.diag = TRUE, X = X, y = y)
 predmean.poisson <- function(beta, Xnew) exp(Xnew %*% beta)
 @
 The following single line performs sample-based prediction of mean response (using \code{X} in lieu of \code{Xnew} for code brevity):
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  ymean.new <- predict(beta.smp, predmean.poisson,
+    nburnin = 100, Xnew = X)
+}
+@
+<<eval=FALSE>>=
 ymean.new <- predict(beta.smp, predmean.poisson,
   nburnin = 100, Xnew = X)
 @
 \code{ymean.new} is a matrix of \code{N} (1000) rows and \code{niter - nburnin} (900) columns. Each row corresponds to an observation (one row of \code{Xnew}), and each column corresponds to a prediction sample (one row of \code{beta.smp} after burn-in).
 
 We can also generate samples from posterior predictive distribution as follows:
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  predsmp.poisson <- function(beta, Xnew)
+    rpois(nrow(Xnew), exp(Xnew %*% beta))
+  ysmp.new <- predict(beta.smp, predsmp.poisson
+    , nburnin = 100, Xnew = X)
+}
+@
+<<eval=FALSE>>=
 predsmp.poisson <- function(beta, Xnew)
   rpois(nrow(Xnew), exp(Xnew %*% beta))
 ysmp.new <- predict(beta.smp, predsmp.poisson
   , nburnin = 100, Xnew = X)
 @
 Comparing prediction summaries is illuminating:
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  summary(ymean.new)
+}
+@
+<<eval=FALSE>>=
 summary(ymean.new)
 @
 %<<echo=FALSE>>=
 %load("summs.pred")
 %print(summ.ymean)
 %@
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  summary(ysmp.new)
+}
+@
+<<eval=FALSE>>=
 summary(ysmp.new)
 @
 %<<echo=FALSE>>=
@@ -441,7 +508,20 @@ As mentioned in Section~\ref{subsection-proposal}, there are two important cases
 
 \subsection{Example 3: High-dimensional Bayesian Poisson regression}\label{subsection-example-highD}
 As discussed in Section~\ref{subsection-proposal}, the multivariate Gaussian proposal in SNS tends to lose accuracy as state space dimensionality rises, leading to poor mixing of the resulting MCMC chain. Continuing with the Poisson regression example, we increase $K$ from 5 to 100, while holding $N=1000$. To illustrate that the problem is not covergence but mixing, we explicitly use the \code{glm} estimate (mode of PDF) as the initial value for the MCMC chain:
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  set.seed(my.seed)
+  K <- 100
+  X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
+  beta <- runif(K, -0.5, +0.5)
+  y <- rpois(N, exp(X %*% beta))
+  beta.init <- glm(y ~ X - 1, family = "poisson")$coefficients
+  beta.smp <- sns.run(beta.init, loglike.poisson,
+    niter = 100, nnr = 10, mh.diag = TRUE, X = X, y = y)
+  summary(beta.smp)
+}
+@
+<<eval=FALSE>>=
 set.seed(my.seed)
 K <- 100
 X <- matrix(runif(N * K, -0.5, +0.5), ncol = K)
@@ -458,7 +538,15 @@ summary(beta.smp)
 %print(summ.nopart)
 
 We see a significant drop in acceptance rate as well as effective sample sizes for the coefficients. Also note that mean relative deviation from quadratic approximation is much larger than the value for $K=5$. To improve mixing, we use the `state space partitioning' strategy of \pkg{sns}, available via the \code{part} argument of \code{sns} and \code{sns.run}. This leads to SNS sampling of subsets of state space wrapped in Gibbs cycles, with each subset being potentially much lower-dimensional than the original, full space. This strategy can significantly improve mixing. Below we use the function \code{sns.make.part} to partition the 100-dimensional state space into 10 subsets, each 10-dimensional:
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  beta.smp.part <- sns.run(beta.init, loglike.poisson,
+    niter = 100, nnr = 10, mh.diag = TRUE,
+    part = sns.make.part(K, 10), X = X, y = y)
+  summary(beta.smp.part)
+}
+@
+<<eval=FALSE>>=
 beta.smp.part <- sns.run(beta.init, loglike.poisson,
   niter = 100, nnr = 10, mh.diag = TRUE,
   part = sns.make.part(K, 10), X = X, y = y)
@@ -470,7 +558,16 @@ summary(beta.smp.part)
 
 Notice the improved acceptance rate as well as effective sample sizes. A comparison of log-probability trace plots confirms better mixing after convergence to PDF mode (see Figure~\ref{fig-poisson-lp-sbs}).
 %<<eval=FALSE>>=
-<<label=ssp_plot,include=FALSE,echo=TRUE>>=
+<<label=ssp_plot,include=FALSE,echo=FALSE>>=
+if (have_regression_factory) {
+  par(mfrow = c(1,2))
+  plot(beta.smp, select = 1)
+  plot(beta.smp.part, select = 1)
+} else {
+  plot(1:10)
+}
+@
+<<eval=FALSE>>=
 par(mfrow = c(1,2))
 plot(beta.smp, select = 1)
 plot(beta.smp.part, select = 1)
@@ -549,7 +646,25 @@ While the diagonal elements of $h_i$ are both negative, indicating that $\bbeta$
 The above result does not contradict the output of \code{sns.check.logdensity}: On the one hand, Theorem~\ref{theorem:concav_1} provides only a sufficient set of conditions. On the other hand, the emipirical checks performed by the software are limited to a finite set of points in the state space, and thus do not lead to any guarantees of negative definiteness everywhere.
 
 While we can certainly try to sample from the full log-density using SNS, a safer option is to break down the full state space into subspaces corresponding to $\bbeta$ and $\ggamma$, apply SNS to each subspace, and wrap these two steps in a Gibbs cycle. This will work because we have theoretical guarantee that the subspace Hessians are both negative-definite, as indicated by the diagonal elements of $h_i$'s. To construct the derivatives for these two state subspaces, we can use the \pkg{RegressionFactory} expander framework in two ways: First, we can supply the base function \code{fbase2.gaussian.identity.log} to \code{regfac.expand.2par} and extract the subspace components from its output. This is easy to implement but is computationally inefficient since gradient and Hessian for the full state space are calculated during sampling from each subspace. Secondly, we can implement base functions for each subspace from scratch. For brevity of presentation, we opt for the first approach here:
-<<>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  loglike.linreg.het.beta <- function(beta, gamma, X, Z, y) {
+    K1 <- length(beta)
+    ret <- regfac.expand.2par(c(beta, gamma), X, Z, y
+      , fbase2 = fbase2.gaussian.identity.log)
+    return (list(f = ret$f, g = ret$g[1:K1], h = ret$h[1:K1, 1:K1]))
+  }
+  loglike.linreg.het.gamma <- function(gamma, beta, X, Z, y) {
+    K1 <- length(beta)
+    K2 <- length(gamma)
+    ret <- regfac.expand.2par(c(beta, gamma), X, Z, y
+      , fbase2 = fbase2.gaussian.identity.log)
+    return (list(f = ret$f, g = ret$g[K1 + 1:K2]
+             , h = ret$h[K1 + 1:K2, K1 + 1:K2]))
+  }
+}
+@
+<<eval=FALSE>>=
 loglike.linreg.het.beta <- function(beta, gamma, X, Z, y) {
   K1 <- length(beta)
   ret <- regfac.expand.2par(c(beta, gamma), X, Z, y
@@ -566,7 +681,28 @@ loglike.linreg.het.gamma <- function(gamma, beta, X, Z, y) {
 }
 @
 Having defined the subspace log-densities, we implement the Gibbs cycle:
-<<>>=
+<<echo=FALSE>>=
+if (have_regression_factory) {
+  nsmp <- 100
+  beta.iter <- rep(0.0, K1)
+  gamma.iter <- rep(0.0, K2)
+  beta.smp <- array(NA, dim = c(nsmp, K1))
+  gamma.smp <- array(NA, dim = c(nsmp, K1))
+  for (n in 1:nsmp) {
+    beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+      , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+    gamma.iter <- sns(gamma.iter, loglike.linreg.het.gamma
+      , beta = beta.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+    beta.smp[n, ] <- beta.iter
+    gamma.smp [n, ] <- gamma.iter
+  }
+  beta.est <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+  gamma.est <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+  print(cbind(beta, beta.est))
+  print(cbind(gamma, gamma.est))
+}
+@
+<<eval=FALSE>>=
 nsmp <- 100
 beta.iter <- rep(0.0, K1)
 gamma.iter <- rep(0.0, K2)
@@ -586,8 +722,30 @@ cbind(beta, beta.est)
 cbind(gamma, gamma.est)
 @
 In the above example, both $\bbeta$ and $\ggamma$ subspaces are log-concave and thus we could use SNS for sampling from both inside the Gibbs cycle. In some problems, we may need to combine SNS with other samplers that do not require log-concavity. This is illustrated next, where we use slice sampler for $\ggamma$ subspace, using the \pkg{MfUSampler} package~\citep{mahani2014mfusampler}.
-<<>>=
-library(MfUSampler)
+<<echo=FALSE>>=
+have_mfu <- require("MfUSampler")
+if (have_mfu && have_regression_factory) {
+  loglike.linreg.het.gamma.fonly <- function(gamma, beta, X, Z, y) {
+    return (regfac.expand.2par(c(beta, gamma), X, Z, y
+      , fbase2 = fbase2.gaussian.identity.log, fgh = 0))
+  }
+  beta.iter <- rep(0.0, K1)
+  gamma.iter <- rep(0.0, K2)
+  for (n in 1:nsmp) {
+    beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+      , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+    gamma.iter <- MfU.Sample(gamma.iter, loglike.linreg.het.gamma.fonly
+      , beta = beta.iter, X = X, Z = Z, y = y)
+    beta.smp[n, ] <- beta.iter
+    gamma.smp [n, ] <- gamma.iter
+  }
+  beta.est.mix <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+  gamma.est.mix <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+  print(cbind(beta, beta.est.mix))
+  print(cbind(gamma, gamma.est.mix))
+}
+@
+<<eval=FALSE>>=
 loglike.linreg.het.gamma.fonly <- function(gamma, beta, X, Z, y) {
   return (regfac.expand.2par(c(beta, gamma), X, Z, y
     , fbase2 = fbase2.gaussian.identity.log, fgh = 0))
@@ -609,7 +767,27 @@ cbind(gamma, gamma.est.mix)
 @
 
 Finally, we illustrate the use of numerical differentiation capabilities in \code{sns}, using the utility function \code{sns.check.logdensity}. We switch back to using SNS with $\ggamma$ subspace, but use \code{loglike.linreg.het.gamma.fonly}, and compute gradient and Hessian numerically, rather than analytically. Rather than requesting log-density augmentation with numerical derivatives to be performed once every iteration inside \code{sns}, we perform this once outside the loop, using \code{sns.fghEval.numaug}:
-<<eval=TRUE>>=
+<<echo=FALSE>>=
+if (have_regression_factory && have_mfu) {
+  loglike.linreg.het.gamma.numaug <- 
+    sns.fghEval.numaug(loglike.linreg.het.gamma.fonly, numderiv = 2)
+  beta.iter <- rep(0.0, K1)
+  gamma.iter <- rep(0.0, K2)
+  for (n in 1:nsmp) {
+    beta.iter <- sns(beta.iter, loglike.linreg.het.beta
+      , gamma = gamma.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+    gamma.iter <- sns(gamma.iter, loglike.linreg.het.gamma
+      , beta = beta.iter, X = X, Z = Z, y = y, rnd = nsmp>10)
+    beta.smp[n, ] <- beta.iter
+    gamma.smp [n, ] <- gamma.iter
+  }
+  beta.est.num <- colMeans(beta.smp[(nsmp/2+1):nsmp, ])
+  gamma.est.num <- colMeans(gamma.smp[(nsmp/2+1):nsmp, ])
+  print(cbind(beta, beta.est.num))
+  print(cbind(gamma, gamma.est.num))
+}
+@
+<<eval=FALSE>>=
 loglike.linreg.het.gamma.numaug <- 
   sns.fghEval.numaug(loglike.linreg.het.gamma.fonly, numderiv = 2)
 beta.iter <- rep(0.0, K1)

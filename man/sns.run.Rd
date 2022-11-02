@@ -112,5 +112,8 @@ cbind(beta.glm, smp.summ$smp$mean)
 
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.
-\keyword{sampling, multivariate, mcmc, Metropolis}
+\keyword{sampling}
+\keyword{multivariate}
+\keyword{mcmc}
+\keyword{Metropolis}
 % \keyword{ ~kwd2 }% __ONLY ONE__ keyword per line

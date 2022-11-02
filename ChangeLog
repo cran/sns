@@ -1,3 +1,12 @@
+Changes in 1.2.2
+  * Edited the Description field of the DESCRIPTION file to mention where to access MfUSampler archive, which is one of the suggested packages by sns.
+
+Changes in 1.2.1
+  * Modified the man pages to include a single keyword per line.
+
+Changes in 1.2.0
+  * Modified the package vignette to make the code depending on 'suggest'ed packages conditional, per CRAN request.
+
 Changes in 1.1.2
   * Added CITATION file to reference JSS paper.
   * Added reference to JSS paper to .Rd files.

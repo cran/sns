@@ -27,6 +27,6 @@ Alireza S. Mahani, Asad Hasan, Marshall Jiang, Mansour T.A. Sharabiani
 \references{
   Thompson, Madeleine (2010) 
   \emph{A Comparison of Methods for Computing Autocorrelation Time}
-  \url{http://arxiv.org/pdf/1011.0175v1.pdf}
+  \url{https://arxiv.org/pdf/1011.0175v1.pdf}
 }
 
